@@ -16,6 +16,12 @@ hr_sd_multiplier:
   source: "Team decision: personal baseline mean ± k·SD"
   note: "Heart rate outside baseline mean ± k·SD is flagged for review."
 
+hr_consecutive_readings:
+  value: 3
+  unit: readings
+  source: "Full Plan §9 (team decision)"
+  note: "Number of consecutive good-quality HR readings that must all be above baseline to flag R-HR-01."
+
 spo2_min:
   value: 92
   unit: "%"
