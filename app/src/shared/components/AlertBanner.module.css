@@ -1,0 +1,41 @@
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  flex-wrap: wrap;
+}
+
+.icon {
+  color: var(--warn);
+  flex-shrink: 0;
+}
+
+.body {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.sub {
+  font-size: 13px;
+  color: var(--text-muted);
+}

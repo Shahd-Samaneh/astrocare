@@ -1,0 +1,10 @@
+# AstroCare backend — major versions pinned. Install with: pip install -r server/requirements.txt
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+pydantic>=2.7,<3
+PyYAML>=6,<7
+numpy>=2,<3
+pandas>=2.2,<4
+reportlab>=4,<5
+httpx>=0.27,<1
+pytest>=8,<10

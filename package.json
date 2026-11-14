@@ -1,0 +1,20 @@
+{
+  "name": "astrocare",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AstroCare: offline-first astronaut health monitoring and decision support (PinkSpectrum).",
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "concurrently -n app,api -c cyan,magenta --restart-tries 3 --restart-after 2000 \"npm --prefix app run dev\" \"npm run dev:api\"",
+    "dev:api": "node scripts/py.mjs scripts/dev_api.py",
+    "build": "npm --prefix app run build",
+    "start": "node scripts/py.mjs -m uvicorn server.main:app --host 127.0.0.1 --port 8000",
+    "test": "node scripts/py.mjs -m pytest server/tests -q && npm --prefix app run typecheck",
+    "lint": "npm --prefix app run lint",
+    "check:offline": "node scripts/check-offline.mjs",
+    "reseed": "node scripts/py.mjs -m server.core.seed --reset"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.5"
+  }
+}

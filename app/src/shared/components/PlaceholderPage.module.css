@@ -1,0 +1,35 @@
+.owners {
+  color: var(--pink-2);
+}
+
+.note {
+  font-size: 13px;
+  color: var(--warn);
+}
+
+.plan {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text-2);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.endpoint {
+  color: var(--accent-2);
+  font-size: 12px;
+}
+
+.pre {
+  margin: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  font-size: 12px;
+  color: var(--text-2);
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre;
+}

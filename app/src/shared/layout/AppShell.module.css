@@ -1,0 +1,47 @@
+.shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg-app);
+}
+
+.column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.main {
+  width: 100%;
+  max-width: 1180px;
+  padding: 28px 32px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.main:focus {
+  outline: none;
+}
+
+.skip {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 10;
+  background: var(--accent);
+  color: var(--accent-ink);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+
+.skip:focus {
+  top: 12px;
+}
+
+@media (max-width: 900px) {
+  .main {
+    padding: 20px 16px 40px;
+  }
+}

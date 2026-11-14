@@ -1,0 +1,10 @@
+{
+  "_comment": "Relaxation scenes. Media files (images/audio) go in /media and must be royalty-free and credited. file = null until media is added.",
+  "scenes": [
+    { "id": "earthrise", "name": "Earthrise", "description": "Earth rising over a quiet horizon.", "audio": ["music", "none"], "file": null },
+    { "id": "forest-stream", "name": "Forest stream", "description": "Running water under tall pines.", "audio": ["nature", "music", "none"], "file": null },
+    { "id": "ocean-shore", "name": "Ocean shore", "description": "Slow waves on a sandy beach.", "audio": ["nature", "music", "none"], "file": null },
+    { "id": "night-sky", "name": "Night sky", "description": "A dark sky full of stars, seen from a mountain.", "audio": ["nature", "none"], "file": null },
+    { "id": "rain-window", "name": "Rain on a window", "description": "Soft rain against glass, warm room light.", "audio": ["nature", "none"], "file": null }
+  ]
+}

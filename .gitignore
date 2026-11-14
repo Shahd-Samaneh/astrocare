@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Builds
+app/dist/
+
+# Local data (regenerated on startup)
+data/astrocare.db
+data/astrocare.db-*
+data/raw/*
+!data/raw/.gitkeep
+data/reports/
+
+# Secrets / models
+.env
+.env.*
+*.gguf
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log

@@ -1,0 +1,47 @@
+# Clinical / data-quality thresholds used by the rule engine (server/rules/).
+# RULE: every threshold needs a `source`. If you don't have one yet, write
+# "TODO" and say so in `note`. Never invent a number for the demo.
+#
+# Each entry: value, unit, source, note.
+
+stale_minutes:
+  value: 120
+  unit: min
+  source: "Team decision (data quality), not clinical"
+  note: "A continuous metric with no reading for longer than this is flagged as stale."
+
+hr_sd_multiplier:
+  value: 2
+  unit: SD
+  source: "Team decision: personal baseline mean ± k·SD"
+  note: "Heart rate outside baseline mean ± k·SD is flagged for review."
+
+spo2_min:
+  value: 92
+  unit: "%"
+  source: "TODO"
+  note: "verify source (commonly cited lower bound for healthy adults; confirm against a NASA/clinical reference)."
+
+sleep_short_hours:
+  value: 6
+  unit: h
+  source: "TODO: NASA sleep/fatigue guidance"
+  note: "Nights shorter than this count as short sleep."
+
+attention_slower_pct:
+  value: 15
+  unit: "%"
+  source: "Team decision; compare with PVT literature"
+  note: "Attention-test median slower than personal baseline by more than this percentage."
+
+pvt_lapse_ms:
+  value: 500
+  unit: ms
+  source: "Psychomotor Vigilance Test convention (lapse = RT > 500 ms)"
+  note: "Reaction times above this count as lapses."
+
+co2_max:
+  value: null
+  unit: mmHg
+  source: "TODO"
+  note: "must come from a NASA source before the demo"

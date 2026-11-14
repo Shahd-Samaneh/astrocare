@@ -1,0 +1,31 @@
+{
+  "_comment": "SIMULATED weekly exercise plan (mission days 140-146). Alternatives with equipmentId need that equipment; the others need none.",
+  "plans": [
+    { "id": "ex-140", "day": 140, "type": "Resistive training", "durationMin": 60, "equipmentId": "eq-ared",
+      "alternatives": [
+        { "id": "alt-140-a", "type": "Resistance band circuit", "durationMin": 40, "equipmentId": "eq-bands" },
+        { "id": "alt-140-b", "type": "Bodyweight circuit", "durationMin": 30, "note": "No equipment" } ] },
+    { "id": "ex-141", "day": 141, "type": "Cycle intervals", "durationMin": 45, "equipmentId": "eq-cycle",
+      "alternatives": [
+        { "id": "alt-141-a", "type": "Treadmill steady run", "durationMin": 30, "equipmentId": "eq-treadmill" },
+        { "id": "alt-141-b", "type": "Bodyweight HIIT", "durationMin": 25, "note": "No equipment" } ] },
+    { "id": "ex-142", "day": 142, "type": "Resistive training", "durationMin": 60, "equipmentId": "eq-ared",
+      "alternatives": [
+        { "id": "alt-142-a", "type": "Resistance band circuit", "durationMin": 40, "equipmentId": "eq-bands" },
+        { "id": "alt-142-b", "type": "Isometric holds + stretching", "durationMin": 25, "note": "No equipment, low intensity" } ] },
+    { "id": "ex-143", "day": 143, "type": "Treadmill run", "durationMin": 45, "equipmentId": "eq-treadmill",
+      "alternatives": [
+        { "id": "alt-143-a", "type": "Cycle steady state", "durationMin": 45, "equipmentId": "eq-cycle" },
+        { "id": "alt-143-b", "type": "Bodyweight circuit", "durationMin": 30, "note": "No equipment" } ] },
+    { "id": "ex-144", "day": 144, "type": "Resistive training", "durationMin": 60, "equipmentId": "eq-ared",
+      "alternatives": [
+        { "id": "alt-144-a", "type": "Resistance band circuit", "durationMin": 40, "equipmentId": "eq-bands" },
+        { "id": "alt-144-b", "type": "Bodyweight circuit", "durationMin": 30, "note": "No equipment" } ] },
+    { "id": "ex-145", "day": 145, "type": "Cycle intervals", "durationMin": 45, "equipmentId": "eq-cycle",
+      "alternatives": [
+        { "id": "alt-145-a", "type": "Treadmill intervals", "durationMin": 30, "equipmentId": "eq-treadmill" },
+        { "id": "alt-145-b", "type": "Bodyweight HIIT", "durationMin": 25, "note": "No equipment" } ] },
+    { "id": "ex-146", "day": 146, "type": "Mobility and stretching", "durationMin": 20,
+      "alternatives": [] }
+  ]
+}

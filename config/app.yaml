@@ -1,0 +1,39 @@
+# AstroCare app configuration (read by server/core/config.py).
+# Everything here is demo configuration for the simulated mission.
+
+mission:
+  name: "Artemis Transit"
+  phase: "deep-space transit"
+  # Mission Elapsed Time at the moment the simulated data is seeded, as DDD:HH:MM.
+  # The mission clock keeps running from this point (stored in the DB at seed time).
+  met_at_seed: "142:07:31"
+
+crew:
+  astronaut_id: "c2"
+  name: "Crew Member 2"
+  initials: "C2"
+
+comms:
+  # Local mode = no Earth link right now. Reports wait in the outbox.
+  local_mode: true
+  # One-way light-time delay in seconds (4 m 12 s).
+  signal_delay_sec: 252
+  # Last successful sync with Earth, relative to seed time.
+  last_sync_days_ago: 3
+  # Comm window schedule: the first window opens this many minutes after seeding,
+  # then repeats every `every_hours` and lasts `duration_minutes`.
+  window:
+    first_after_seed_minutes: 860   # 14 h 20 m
+    every_hours: 24
+    duration_minutes: 45
+
+simulator:
+  days: 14
+  # true = wipe and regenerate simulated data on every server start (handy for demo day).
+  reseed_on_start: false
+  random_seed: 42
+
+ollama:
+  url: "http://localhost:11434"
+  chat_model: "llama3.2:3b"
+  embed_model: "nomic-embed-text"

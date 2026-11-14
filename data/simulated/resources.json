@@ -1,0 +1,29 @@
+{
+  "_comment": "SIMULATED onboard inventory for the demo. Not medical advice. Loaded into the DB by server/core/seed.py.",
+  "resources": [
+    { "id": "med-01", "kind": "medicine", "name": "Paracetamol (acetaminophen) tablets", "qty": 48, "unit": "tablets", "expiry": "2028-03-31", "status": "available", "contraindicatedAllergies": [] },
+    { "id": "med-02", "kind": "medicine", "name": "Ibuprofen tablets", "qty": 0, "unit": "tablets", "expiry": "2027-11-30", "status": "out_of_stock", "contraindicatedAllergies": ["NSAIDs"] },
+    { "id": "med-03", "kind": "medicine", "name": "Amoxicillin capsules", "qty": 21, "unit": "capsules", "expiry": "2027-08-31", "status": "available", "contraindicatedAllergies": ["Penicillin"] },
+    { "id": "med-04", "kind": "medicine", "name": "Loratadine tablets", "qty": 30, "unit": "tablets", "expiry": "2028-01-31", "status": "available", "contraindicatedAllergies": [] },
+    { "id": "med-05", "kind": "medicine", "name": "Promethazine tablets", "qty": 20, "unit": "tablets", "expiry": "2027-12-31", "status": "available", "contraindicatedAllergies": [] },
+    { "id": "med-06", "kind": "medicine", "name": "Melatonin tablets", "qty": 25, "unit": "tablets", "expiry": "2025-06-30", "status": "expired", "contraindicatedAllergies": [] },
+    { "id": "med-07", "kind": "medicine", "name": "Zolpidem tablets", "qty": 6, "unit": "tablets", "expiry": "2027-05-31", "status": "low", "contraindicatedAllergies": [] },
+    { "id": "med-08", "kind": "medicine", "name": "Ciprofloxacin tablets", "qty": 14, "unit": "tablets", "expiry": "2027-10-31", "status": "available", "contraindicatedAllergies": ["Fluoroquinolones"] },
+    { "id": "med-09", "kind": "medicine", "name": "Azithromycin tablets", "qty": 6, "unit": "tablets", "expiry": "2027-09-30", "status": "available", "contraindicatedAllergies": ["Macrolides"] },
+    { "id": "med-10", "kind": "medicine", "name": "Pseudoephedrine tablets", "qty": 24, "unit": "tablets", "expiry": "2027-12-31", "status": "available", "contraindicatedAllergies": [] },
+    { "id": "med-11", "kind": "medicine", "name": "Oxymetazoline nasal spray", "qty": 2, "unit": "bottles", "expiry": "2027-06-30", "status": "available", "contraindicatedAllergies": [] },
+    { "id": "med-12", "kind": "medicine", "name": "Hydrocortisone cream", "qty": 3, "unit": "tubes", "expiry": "2028-02-28", "status": "available", "contraindicatedAllergies": [] },
+    { "id": "med-13", "kind": "medicine", "name": "Silver sulfadiazine cream", "qty": 2, "unit": "tubes", "expiry": "2027-07-31", "status": "available", "contraindicatedAllergies": ["Sulfonamides"] },
+    { "id": "med-14", "kind": "medicine", "name": "Ondansetron tablets", "qty": 10, "unit": "tablets", "expiry": "2027-04-30", "status": "available", "contraindicatedAllergies": [] },
+    { "id": "med-15", "kind": "medicine", "name": "Lubricating eye drops", "qty": 4, "unit": "bottles", "expiry": "2027-03-31", "status": "available", "contraindicatedAllergies": [] },
+
+    { "id": "eq-ared", "kind": "equipment", "name": "Resistive exercise device", "qty": 1, "unit": "unit", "status": "available", "contraindicatedAllergies": [] },
+    { "id": "eq-cycle", "kind": "equipment", "name": "Cycle ergometer", "qty": 1, "unit": "unit", "status": "available", "contraindicatedAllergies": [] },
+    { "id": "eq-treadmill", "kind": "equipment", "name": "Treadmill with harness", "qty": 1, "unit": "unit", "status": "available", "contraindicatedAllergies": [] },
+    { "id": "eq-bands", "kind": "equipment", "name": "Resistance bands", "qty": 2, "unit": "sets", "status": "low", "contraindicatedAllergies": [] },
+    { "id": "eq-bp-cuff", "kind": "equipment", "name": "Blood pressure cuff", "qty": 1, "unit": "unit", "status": "available", "contraindicatedAllergies": [] },
+    { "id": "eq-thermometer", "kind": "equipment", "name": "Digital thermometer", "qty": 2, "unit": "units", "status": "available", "contraindicatedAllergies": [] },
+    { "id": "eq-ultrasound", "kind": "equipment", "name": "Portable ultrasound", "qty": 1, "unit": "unit", "status": "available", "contraindicatedAllergies": [] },
+    { "id": "eq-aed", "kind": "equipment", "name": "Automated external defibrillator", "qty": 1, "unit": "unit", "status": "available", "contraindicatedAllergies": [] }
+  ]
+}
