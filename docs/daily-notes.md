@@ -12,7 +12,7 @@ Working log for the Daily pair. The agreed contract is in [daily-contract.md](da
 | S4 | Only `pvt_lapse_ms` has a source ("Psychomotor Vigilance Test convention"). Every other daily key is `note: "experimental value"`. No citation was invented. | Medical honesty rule. |
 | S5 | Lapse = RT **≥** `pvt_lapse_ms` (the old stub used `>`). | Contract §5 says "lapses (≥ pvt_lapse_ms)". |
 | S6 | The baseline maths live in one place, `server/features/daily/attention_stats.py`, used by the API, the summary and both rules. It also holds the contract extensions (`DailyCognitiveTest`, `DailyNextStep`, `DailyAlert`) and the `daily_test_context` table. | Prevents two baselines drifting apart. Extensions stay out of core (contract §1). |
-| S7 | Baseline = median of the 7 newest **routine** tests older than 48 h. Range = min/max of those (or median ± 10 % when there are fewer than 3). Retests are never in the baseline or in the "last 48 h" median. | Contract §3 and §5. A retest after rest would otherwise mask the pattern. |
+| S7 | Baseline = median of the 7 newest **routine** tests older than 48 h. Range = median ± max(10 %, spread of those tests) (see S40; was min/max). Retests are never in the baseline or in the "last 48 h" median. | Contract §3 and §5. A retest after rest would otherwise mask the pattern. |
 | S8 | The engine only *skips* duplicates, so `engine_hooks.py::run_daily_engine()` runs `run_rules()` and then updates the open R-SLP-01 / R-FAT-01 alert in place: whatChanged, missing, nextSteps with the real alert id in `/attention?retest=<id>`, and retest → `recheck`. Every Daily POST calls it. | Contract §3 ("one open alert, each run updates it"). Proposal §3 moves this into the engine. |
 | S9 | Retest line: `Retest at HH:MM: median X ms (within/outside your usual range)`. HH:MM is **mission time (MET)**, the same clock as the status bar. Alerts never auto-close. | Consistent with the rest of the app. Closing is a human decision. |
 | S10 | The "No response within 5 s" trial records 5000 ms (a lapse). This is a UI constant, not a clinical threshold. | Keeps the test from hanging if the crew member walks away. |
@@ -123,3 +123,54 @@ nasa-hrp-ongoing
 ### For Shahd (manual steps)
 - Open PR `shahd/daily` → `feature/daily`: https://github.com/Shahd-Samaneh/astrocare/compare/feature/daily...shahd/daily?expand=1
 - Ask Nadia to review it, then merge.
+
+---
+
+## Shahd, round 2: Attention check upgrades, R-CIRC-01, connected charts
+
+### Decisions
+
+| # | Decision | Why |
+|---|---|---|
+| S20 | New `GET /api/daily/thresholds` (in `thresholds.py`, mine) returns every `daily:` key with `value`, `unit`, `source` and `note`. Charts draw their lines from it. | No threshold numbers in frontend code. |
+| S21 | Tests now carry `missionDay` (derived from `ts` with the mission clock). The sleep fallback in `summary.py` also returns `date`, `start`, `end` and `source` (Nadia's contract fields are a subset). | The 14-day chart and the history table group by mission day. |
+| S22 | Sleep vs reaction time chart: bars use the **longest** session per night. The line uses the median of **routine quick** tests per mission day. "Both off" = sleep < `sleep_short_hours` **and** median ≥ baseline × (1 + `attention_slower_pct`/100). Missing days are gaps. The caption is "Shown together, not a proven cause." | Same definitions as R-FAT-01, so the chart and the alert agree. |
+| S23 | R-CIRC-01 compares bedtimes on a clock that starts at **noon** (23:30 vs 00:30 = 1 h, not 23 h), using mission time. It needs ≥ 2 of the last 3 nights; nights without data go into `missing`. The main sleep of a night is its longest session. New key `daily.sleep_onset_shift_hours` = 2, "experimental value". | Avoids the midnight wrap. Naps don't count as bedtimes. |
+| S24 | Seeded bedtimes are 22:42 / 00:28 / 00:36, a 1.9 h spread, so **R-CIRC-01 doesn't fire in the demo**. It's tested on synthetic nights. Proposal §4b has the one-line simulator change (+30 min on the two short nights). | Rule: don't edit the simulator. |
+| S25 | Hours awake = test time − `end` of the last sleep session that **ended before** the test. It's computed on the server (`sleepContext` in the `POST /api/tests` response). "—" when unknown. The SIM badge shows when that session's `source` is `simulated`. | One definition, testable. |
+| S26 | Practice trial default: on until the first test **saved on this device**, then off. The user's own choice is remembered in `localStorage` (`astrocare.daily.attention.practice`), every access in try/catch. A false start during practice is shown but not counted. | The seeded history shouldn't count as "this person has done a test here". |
+| S27 | PVT counter: display only (`requestAnimationFrame`). The measured RT always comes from the controller's own `performance.now()` stamp, so it's identical with `prefers-reduced-motion` (static highlighted target, no counting). The frozen RT shows ~1 s. | Timing logic must not depend on the animation. |
+| S28 | KSS (Karolinska Sleepiness Scale) 1–9 or `null` (skipped), stored in **`daily_test_meta`**. Anchor labels for 1/3/5/7/9 follow the published scale. "Test again" returns to the intro and clears the rating. | A rating belongs to one test. |
+| S29 | `daily_test_meta(test_id, mode, sleepiness_kss, input_method, trial_offsets_ms)` was created once in 4c with all columns. No row = a quick test with no extra data (all simulated tests). | No schema migrations between steps. |
+| S30 | Extended mode: random waits of 2–10 s until 3 minutes have passed since the first real trial (the practice trial doesn't count towards the 3 minutes). If time runs out during a wait, the test ends there. A false start is counted but doesn't "repeat" a trial. | Spec. |
+| S31 | **Interval note:** in both modes the time between a response and the next stimulus is the ~1 s frozen-RT display **plus** the random wait (so 3–9 s quick, 3–11 s extended). | Honest description of what the code does. |
+| S32 | PVT measures (server, `pvt_measures`) are computed for every test: mean RT, fastest/slowest 10 % mean (10 % = `round(n/10)`, at least 1 response), response speed = mean(1000/RT) in 1/s, lapses (≥ `pvt_lapse_ms`), false starts. They're shown for Extended only. | Standard PVT outcome set. With 5 trials, "10 %" is one response, so it's hidden for Quick. |
+| S33 | Baselines are **per mode** (`GET /api/tests/baseline?mode=`). With fewer than 3 same-mode tests, `building: true`: the UI shows "Building your baseline (n/3)", `withinRange` is `null`, and % vs baseline is labelled "preliminary". The ±10 % range from contract §5 is still computed for the API. R-FAT-01 and the 14-day chart use **quick** routine tests only. | Never compare a 3-minute test with 5-trial tests. |
+| S34 | Retest Before vs After: Before = median of the routine tests (same mode as the retest) in the 48 h before the alert's time; After = the retest median. The response carries the alert status **after** the engine ran (so `recheck`). | The number that triggered the alert. |
+| S35 | Input method = the first real response: `pointerType` mouse → `mouse`, touch/pen → `touch`, Space → `keyboard`. "Usual" = most common known input among the baseline tests. No note when that is unknown (the seeded tests have none). | Fair comparison without guessing. |
+| S36 | History table `withinRange` is computed per test against the same-mode baseline **as it was at that test's time**. The narrow min–max range of round 2 is replaced by S40. | Honest per-row verdict. The range method is a team choice ("experimental"). |
+| S37 | ~~A faster-than-usual result is also labelled "Outside your usual range".~~ Replaced by S41. | |
+| S38 | "Add to report": the button probes `GET /api/reports/items?pending=true` and is **hidden on 404**. On `shahd/daily` today it's hidden, because Noura's API is on `main` but not yet on `feature/daily`. I checked the exact payload (`kind: 'note'`, `title`, one-line `text`, `sourceFeature: 'daily'`, `refId`) against `origin/main` in a temporary worktree: 201 Created. Only test numbers and KSS are sent, never check-in notes. | Spec (hide on 404). |
+| S39 | `GET /api/tests` limit raised to 200 (the page loads 200: charts use the last 14 days, the table pages by 20). | History table. |
+| S40 | Usual range = **median ± max(10 % of the median, spread)**, spread = the largest distance of a baseline test from the median. Same rule with < 3 tests. The history table (per test, at its own time) and both chart bands use the same server range. | The min–max range of 3–7 tests was so narrow that ordinary days showed ✗. This range always contains every baseline test and is never narrower than ±10 %. Still a team choice ("experimental"). |
+| S41 | New `rangeStatus`: `within` · `faster` · `slower` (above the range, < `attention_slower_pct`) · `flagged` (slower by ≥ `attention_slower_pct`). Badges: "Within your usual range" (good), "Faster than usual" (info), "A little slower than usual" (neutral), "Slower than usual" (review: the only flagged one). Table: ✓ / ✓ faster / a little slower / ✗ slower. `withinRange` stays for compatibility. | A faster result must never read as a problem; only a slowdown of ≥ 15 % is flagged, the same threshold as R-FAT-01. |
+
+### Sources (for the report)
+- **KSS:** Åkerstedt T, Gillberg M. *Subjective and objective sleepiness in the active individual.* International Journal of Neuroscience, 1990; 52(1–2): 29–37. Cited in docs and the report only; there's no URL in `app/src`.
+- PVT outcome measures (mean RT, fastest/slowest 10 %, 1/RT, lapses ≥ 500 ms) follow common PVT reporting conventions. Our 3-minute Extended mode is **not** a validated PVT-B implementation, and the UI says "Experimental, not validated".
+
+### Browser check (step 6)
+- Ran with headless Edge, driven by a DevTools-protocol script (in the scratchpad, not committed).
+- Your `npm run dev` was already holding port 8000 (auto-reloading API + Vite), so `npm run start` couldn't bind. I tested against that server with a fresh `npm run build`, and left your dev server running.
+- Results:
+
+| State | Result |
+|---|---|
+| Quick + practice | ✅ "Practice: not counted" shown first, PVT counter visible, result with KSS 7/9 line, hours slept/awake + SIM badge, dot plot, both charts, collapsed table and NASA panel |
+| Retest (`?retest=<R-FAT-01 id>`) | ✅ Before 342 ms / After 279 ms / −63 ms (−18 %) / status RECHECK, "Back to the alert" |
+| Reduced motion | ✅ no counter, static highlighted target, result saved |
+| Extended (3 min) | ✅ ran the full 3 minutes: 22 responses, server measures shown (mean RT, fastest/slowest 10 %, response speed 3.76 1/s), "Building your baseline (0/3)" with no verdict, time-on-task chart. The first two values (5000 ms, 1356 ms) are artifacts: the script paused 20 s for a screenshot. |
+| Timing check | An in-page responder firing 250–255 ms after the stimulus recorded 251–256 ms. |
+
+- No console errors, page exceptions or non-localhost requests in any run.
+- The test rows created during the check were removed with `npm run reseed`.

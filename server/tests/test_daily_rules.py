@@ -117,3 +117,47 @@ def test_sources_endpoint_lists_the_seven_ids(c):
 def test_unmodified_seed_has_no_checkin_today():
     with daily_client(remove_today_checkin=False) as c:
         assert "Today's check-in" in open_alert(c, FAT)["missing"]
+
+
+def test_retest_returns_before_vs_after(c):
+    a = open_alert(c, FAT)
+    r = c.post("/api/tests", json={"trialsMs": [280, 290, 285, 300, 275], "context": "retest",
+                                   "relatedAlertId": a["id"]}).json()
+    cmp = r["retest"]
+    assert cmp["alertId"] == a["id"] and cmp["ruleId"] == FAT
+    assert cmp["alertStatus"] == "recheck"
+    assert set(cmp["beforeTestIds"]) == {"pvt-141", "pvt-142"}
+    assert cmp["beforeMedianMs"] == pytest.approx(342, abs=15)
+    assert cmp["afterMedianMs"] == 285
+    assert cmp["diffMs"] == pytest.approx(285 - cmp["beforeMedianMs"])
+    assert cmp["diffPct"] < 0  # faster after rest
+
+
+def test_routine_test_has_no_retest_comparison(c):
+    assert c.post("/api/tests", json={"trialsMs": [300, 310, 290]}).json()["retest"] is None
+
+
+def test_fat_01_ignores_extended_tests(c):
+    """R-FAT-01 compares quick routine tests only: a fast extended test changes nothing."""
+    before = open_alert(c, FAT)
+    c.post("/api/tests", json={"trialsMs": [250, 255, 260, 248, 252], "mode": "extended"})
+    after = open_alert(c, FAT)
+    assert after["id"] == before["id"]
+    assert "median 342 ms over 2 routine tests" in after["whatChanged"]
+
+
+def test_daily_thresholds_endpoint_has_sources(c):
+    th = c.get("/api/daily/thresholds").json()
+    for key in ("sleep_short_hours", "sleep_short_nights", "attention_slower_pct", "attention_baseline_n",
+                "pvt_lapse_ms", "sleep_onset_shift_hours", "exercise_missed_days"):
+        assert key in th, key
+        assert th[key]["source"], key
+        assert th[key]["note"], key
+    assert th["sleep_onset_shift_hours"]["value"] == 2
+    assert "experimental value" in th["sleep_onset_shift_hours"]["note"]
+
+
+def test_summary_filter_includes_circ():
+    from server.features.daily.summary import DAILY_RULE_PREFIXES
+
+    assert set(DAILY_RULE_PREFIXES) == {"R-SLP", "R-FAT", "R-CIRC", "R-EX"}

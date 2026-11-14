@@ -86,6 +86,12 @@ daily:
     source: "Psychomotor Vigilance Test convention"
     note: "standard PVT lapse definition (reaction time ≥ 500 ms)"
 
+  sleep_onset_shift_hours:
+    value: 2
+    unit: h
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. Largest difference between bedtimes over the last 3 nights (R-CIRC-01)."
+
   exercise_missed_days:
     value: 2
     unit: days

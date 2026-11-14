@@ -15,19 +15,33 @@ import {
   type DailyAlert,
   type DailyCognitiveTest,
   type DailySummary,
+  type DailyThresholds,
+  type InputMethod,
+  type TestMode,
   type TestResult,
 } from '../api.attention';
 import { HistoryChart } from '../attention/HistoryChart';
 import { EXPERIMENTAL_NOTE, ResultPanel } from '../attention/ResultPanel';
+import { AddToReport } from '../attention/AddToReport';
+import { RetestCompare } from '../attention/RetestCompare';
+import { SleepRtChart } from '../attention/SleepRtChart';
+import { SleepinessQuestion } from '../attention/SleepinessQuestion';
+import { TestHistoryTable } from '../attention/TestHistoryTable';
 import { TestRunner } from '../attention/TestRunner';
-import { TRIALS, isRunning, useReactionTest } from '../attention/useReactionTest';
+import {
+  TRIALS,
+  isRunning,
+  loadPracticeDefault,
+  markFirstTestDone,
+  savePracticeChoice,
+  useReactionTest,
+  type RawResult,
+} from '../attention/useReactionTest';
 import styles from '../attention/Attention.module.css';
 import { NasaBasis } from '../common/NasaBasis';
 
 type Saving =
-  | { state: 'idle' }
-  | { state: 'saving' }
-  | { state: 'error'; message: string; trials: number[]; falseStarts: number };
+  { state: 'idle' } | { state: 'saving' } | { state: 'error'; message: string; raw: RawResult };
 
 const WHY =
   'Tiredness can slow reactions before you notice it yourself. A one-minute test, compared with your own usual range, ' +
@@ -38,45 +52,63 @@ export default function AttentionCheck() {
   const retestId = params.get('retest');
   const { status } = useAppStatus();
 
-  const history = useApi<DailyCognitiveTest[]>(paths.tests(10));
+  const history = useApi<DailyCognitiveTest[]>(paths.tests(200));
   const baseline = useApi<AttentionBaseline>(paths.baseline);
-  const summary = useApi<DailySummary>(paths.summary(7));
+  const summary = useApi<DailySummary>(paths.summary(14));
+  const thresholds = useApi<DailyThresholds>(paths.thresholds);
   const alert = useApi<DailyAlert>(retestId ? paths.alert(retestId) : null);
 
   const [result, setResult] = useState<TestResult>();
   const [saving, setSaving] = useState<Saving>({ state: 'idle' });
+  const [practice, setPractice] = useState(loadPracticeDefault);
+  const [kss, setKss] = useState<number | null | undefined>(undefined);
+  const [mode, setMode] = useState<TestMode>('quick');
 
   const save = useCallback(
-    async (trialsMs: number[], falseStarts: number) => {
+    async (raw: RawResult) => {
+      if (!raw.trialsMs.length) {
+        setSaving({ state: 'error', message: 'no responses were recorded', raw });
+        return;
+      }
       setSaving({ state: 'saving' });
       try {
         const r = await postTest({
-          trialsMs,
-          falseStarts,
+          trialsMs: raw.trialsMs,
+          falseStarts: raw.falseStarts,
+          mode: raw.mode,
+          trialOffsetsMs: raw.offsetsMs,
+          inputMethod: raw.inputMethod,
+          sleepinessKss: kss ?? null,
           ...(retestId ? { context: 'retest' as const, relatedAlertId: retestId } : {}),
         });
         setResult(r);
         setSaving({ state: 'idle' });
+        markFirstTestDone();
         history.reload();
         baseline.reload();
         summary.reload();
       } catch (e) {
         const message = e instanceof ApiError ? e.message : String(e);
-        setSaving({ state: 'error', message, trials: trialsMs, falseStarts });
+        setSaving({ state: 'error', message, raw });
       }
     },
-    [retestId, history, baseline, summary],
+    [retestId, kss, history, baseline, summary],
   );
 
   const test = useReactionTest(save);
   const phase = test.state.phase;
   const running = isRunning(phase);
-  const respond = useCallback(() => test.respond(), [test]);
+  const respond = useCallback((m: InputMethod) => test.respond(m), [test]);
   const cancel = useCallback(() => test.cancel(), [test]);
+  const backToIntro = () => {
+    setResult(undefined);
+    setSaving({ state: 'idle' });
+    setKss(undefined); // a fresh rating for each test
+  };
   const start = () => {
     setResult(undefined);
     setSaving({ state: 'idle' });
-    test.start();
+    test.start({ practice, mode });
   };
 
   const dateText = new Date().toLocaleDateString('en-GB', {
@@ -86,7 +118,6 @@ export default function AttentionCheck() {
   });
   const eyebrow = `Daily · ${status ? `Mission day ${status.missionDay} · ` : ''}${dateText}`;
   const ruleLabel = alert.data?.ruleId ?? 'R-FAT-01';
-  const lastNight = summary.data?.sleep?.lastNight?.hours;
 
   return (
     <>
@@ -111,7 +142,13 @@ export default function AttentionCheck() {
       <div className={styles.column}>
         <Card
           title={running ? 'Test in progress' : result ? 'Your result' : 'Reaction-time test'}
-          subtitle={running ? 'Esc cancels' : `${TRIALS} trials, about 1 minute`}
+          subtitle={
+            running
+              ? 'Esc cancels'
+              : mode === 'extended'
+                ? '3 minutes · Experimental, not validated'
+                : `${TRIALS} trials, about 1 minute`
+          }
         >
           {running ? (
             <TestRunner state={test.state} onRespond={respond} onCancel={cancel} />
@@ -120,13 +157,14 @@ export default function AttentionCheck() {
           ) : saving.state === 'error' ? (
             <ErrorState
               message={`Your result was not saved: ${saving.message}`}
-              onRetry={() => save(saving.trials, saving.falseStarts)}
+              onRetry={() => save(saving.raw)}
             />
           ) : result ? (
             <>
-              <ResultPanel result={result} lastNightHours={lastNight} />
+              {result.retest && <RetestCompare cmp={result.retest} />}
+              <ResultPanel result={result} lapseMs={thresholds.data?.pvt_lapse_ms?.value ?? null} />
               <div className={styles.row}>
-                {retestId && (
+                {retestId && !result.retest && (
                   <Button
                     to={`/alerts/${encodeURIComponent(retestId)}`}
                     icon={<ArrowLeft size={16} />}
@@ -134,7 +172,8 @@ export default function AttentionCheck() {
                     Back to the alert
                   </Button>
                 )}
-                <Button variant="secondary" onClick={start} icon={<Play size={16} />}>
+                <AddToReport result={result} />
+                <Button variant="secondary" onClick={backToIntro} icon={<Play size={16} />}>
                   Test again
                 </Button>
               </div>
@@ -145,16 +184,80 @@ export default function AttentionCheck() {
                 A light will appear after a random wait. Respond as fast as you can by clicking,
                 tapping or pressing <kbd>Space</kbd>.
               </p>
+              <fieldset className={styles.modes}>
+                <legend className="sr-only">Test length</legend>
+                <label className={styles.modeOption}>
+                  <input
+                    type="radio"
+                    name="pvt-mode"
+                    value="quick"
+                    checked={mode === 'quick'}
+                    onChange={() => setMode('quick')}
+                  />
+                  <span>
+                    <span className={styles.modeTitle}>Quick</span>
+                    <br />
+                    <span className={styles.modeDesc}>{TRIALS} trials, ~1 min. The default.</span>
+                  </span>
+                </label>
+                <label className={styles.modeOption}>
+                  <input
+                    type="radio"
+                    name="pvt-mode"
+                    value="extended"
+                    checked={mode === 'extended'}
+                    onChange={() => setMode('extended')}
+                  />
+                  <span>
+                    <span className={styles.modeTitle}>Extended (3 minutes)</span>
+                    <br />
+                    <span className={styles.modeDesc}>
+                      Experimental, not validated. More measures, compared only with your other
+                      extended tests.
+                    </span>
+                  </span>
+                </label>
+              </fieldset>
               <ul className={styles.facts}>
-                <li>{TRIALS} trials, each after a wait of 2–8 seconds: about 1 minute in total.</li>
-                <li>Responding before the light is a false start, and that trial repeats.</li>
+                {mode === 'quick' ? (
+                  <>
+                    <li>
+                      {TRIALS} trials, each after a wait of 2–8 seconds: about 1 minute in total.
+                    </li>
+                    <li>Responding before the light is a false start, and that trial repeats.</li>
+                  </>
+                ) : (
+                  <>
+                    <li>
+                      Lights keep coming after waits of 2–10 seconds until 3 minutes have passed.
+                    </li>
+                    <li>Responding before the light is a false start. It is counted.</li>
+                  </>
+                )}
                 <li>
-                  Your median time is compared with your own usual range, not with other people.
+                  Your median time is compared with your own usual range for the same test length,
+                  not with other people.
                 </li>
               </ul>
+              <SleepinessQuestion value={kss} onChange={setKss} />
+              <label className={styles.check}>
+                <input
+                  type="checkbox"
+                  checked={practice}
+                  onChange={(e) => {
+                    setPractice(e.target.checked);
+                    savePracticeChoice(e.target.checked);
+                  }}
+                />
+                Start with one practice trial (Practice: not counted)
+              </label>
               <div className={styles.row}>
                 <Button onClick={start} icon={<Timer size={16} />} autoFocus>
-                  {retestId ? 'Start retest' : 'Start'}
+                  {retestId
+                    ? 'Start retest'
+                    : mode === 'extended'
+                      ? 'Start extended test'
+                      : 'Start'}
                 </Button>
               </div>
               <p className={styles.experimental} role="note">
@@ -174,9 +277,34 @@ export default function AttentionCheck() {
             ) : history.error ? (
               <ErrorState message={history.error.message} onRetry={history.reload} />
             ) : (
-              <HistoryChart tests={history.data ?? []} baseline={baseline.data} />
+              <HistoryChart tests={(history.data ?? []).slice(0, 10)} baseline={baseline.data} />
             )}
           </Card>
+        )}
+
+        {!running && (
+          <Card
+            title="Sleep and reaction time, last 14 days"
+            subtitle="Sleep per night (bars) and daily median of routine tests (line)"
+          >
+            {(summary.loading && !summary.data) || (history.loading && !history.data) ? (
+              <LoadingState />
+            ) : summary.error ? (
+              <ErrorState message={summary.error.message} onRetry={summary.reload} />
+            ) : (
+              <SleepRtChart
+                nights={summary.data?.sleep?.nights ?? []}
+                tests={history.data ?? []}
+                baseline={baseline.data}
+                thresholds={thresholds.data}
+                lastDay={status?.missionDay}
+              />
+            )}
+          </Card>
+        )}
+
+        {!running && history.data && history.data.length > 0 && (
+          <TestHistoryTable tests={history.data} />
         )}
 
         <NasaBasis

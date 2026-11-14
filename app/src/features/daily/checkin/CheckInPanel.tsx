@@ -105,7 +105,9 @@ export function CheckInPanel({ id = 'checkin', hideBasis = false }: CheckInPanel
     setError(undefined);
     try {
       await postCheckIn(
-        skipped ? { skipped: true } : { mood, stress, notePrivate: note.trim() || undefined, skipped: false },
+        skipped
+          ? { skipped: true }
+          : { mood, stress, notePrivate: note.trim() || undefined, skipped: false },
       );
       setEditing(false);
       setMood(undefined);
@@ -126,7 +128,13 @@ export function CheckInPanel({ id = 'checkin', hideBasis = false }: CheckInPanel
       id={id}
       title="Daily check-in"
       subtitle="How are you today? About 20 seconds."
-      actions={done ? <Badge variant="good">Done today ✓</Badge> : <Badge variant="missing">Not done today</Badge>}
+      actions={
+        done ? (
+          <Badge variant="good">Done today ✓</Badge>
+        ) : (
+          <Badge variant="missing">Not done today</Badge>
+        )
+      }
       className={styles.card}
     >
       {summary.loading && !summary.data ? (

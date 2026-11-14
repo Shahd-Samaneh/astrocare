@@ -13,7 +13,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from fastapi import APIRouter
+
 from server.core.config import Threshold, _load_yaml, thresholds
+
+router = APIRouter()
 
 
 def daily_entries() -> dict[str, Threshold]:
@@ -37,3 +41,9 @@ def daily_threshold_entry(name: str) -> Threshold:
 
 def daily_threshold(name: str) -> Any:
     return daily_threshold_entry(name).value
+
+
+@router.get("/daily/thresholds")
+def list_daily_thresholds() -> dict[str, dict[str, Any]]:
+    """Every `daily:` threshold with its unit, source and note (charts draw the lines from here)."""
+    return {k: {"value": t.value, "unit": t.unit, "source": t.source, "note": t.note} for k, t in daily_entries().items()}

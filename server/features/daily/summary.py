@@ -26,7 +26,7 @@ from .checkins import checkins_summary
 
 router = APIRouter()
 
-DAILY_RULE_PREFIXES = ("R-SLP", "R-FAT", "R-EX")
+DAILY_RULE_PREFIXES = ("R-SLP", "R-FAT", "R-CIRC", "R-EX")
 
 
 # ---- fallbacks until Nadia's service functions exist ---------------------------
@@ -34,9 +34,9 @@ def _sleep_summary_stub(days: int) -> dict[str, Any]:
     rows = db.query("sleep_sessions", order_by="start DESC", limit=days)
     nights = [
         {
-            "id": r["id"], "missionDay": mission_clock(parse_ts(r["end"]))[1],
+            "id": r["id"], "date": r["end"][:10], "missionDay": mission_clock(parse_ts(r["end"]))[1],
             "hours": round(r["duration_min"] / 60, 2), "awakenings": r["awakenings"],
-            "selfQuality": r["self_quality"],
+            "selfQuality": r["self_quality"], "start": r["start"], "end": r["end"], "source": r["source"],
         }
         for r in reversed(rows)
     ]
