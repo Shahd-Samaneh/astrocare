@@ -1,0 +1,23 @@
+title: How Google and NASA are Testing AI for Medical Care in Space
+url: https://cloud.google.com/blog/topics/public-sector/how-google-and-nasa-are-testing-ai-for-medical-care-in-space
+id: google-nasa-cmo-assistant
+
+How Google and NASA are testing AI for medical care in space
+
+Vice President, Federal, Google Public Sector
+
+Google Public Sector Newsletter
+
+Essential public sector updates with Google Cloud insights.
+
+As NASA embarks on a new era of human spaceflight, beginning with the Artemis campaign's aim to return to the Moon, preparations are underway to ensure crew health and wellness. This includes exploring whether remote care capabilities can deliver detailed diagnoses and treatment options if a physician is not onboard or if real-time communication with Earth is limited. Supporting crew health through space-based medical care is becoming increasingly important as NASA missions venture deeper into space.
+
+To address this challenge, Google and NASA collaborated on an innovative proof-of-concept for an automated Clinical Decision Support System (CDSS) known as the "Crew Medical Officer Digital Assistant" (CMO-DA). Designed to assist astronauts with medical help during extended space missions, this multi-modal interface leverages AI. The goal is to potentially support human exploration of the Moon, Mars, and beyond.
+
+The CMO-DA tool could help astronauts autonomously diagnose and treat symptoms when crews are not in direct contact with Earth-based medical experts. Trained on spaceflight literature, the AI system uses cutting-edge natural language processing and machine learning techniques to safely provide real-time analyses of crew health and performance. The tool is designed to support a designated crew medical officer or flight surgeon in maintaining crew health and making medical decisions driven by data and predictive analytics.
+
+Initial trials tested CMO-DA on a wide range of medical scenarios. Outputs were measured using the Objective Structured Clinical Examination framework, a tool used to evaluate the clinical skills of medical students and working healthcare professionals. Early results showed promise for reliable diagnoses based on reported symptoms. Google and NASA are now collaborating with medical doctors to test and refine the model, aiming to enhance autonomous crew health and performance during future space exploration missions.
+
+This innovative system isn't just about supporting space exploration; it's about pushing the boundaries of what's possible with AI to provide essential care in the most remote and demanding environments. This tool represents an important milestone for AI assisted medical care and our continued exploration of the cosmos. It holds potential for advancing space missions and could also benefit people here on Earth by providing early access to quality medical care in remote areas.
+
+At Google Public Sector, we’re passionate about supporting your mission. Learn more about how Google’s AI solutions can empower your agency and register to attend our Google Public Sector Summit taking place October 29, 2025, in Washington, D.C. There, you will have an opportunity to hear from public sector leaders and industry experts, and get hands-on with Google’s latest AI technologies.

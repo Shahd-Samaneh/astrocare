@@ -1,0 +1,26 @@
+title: Objective Structured Clinical Evaluation (OSCE) of an Artificial Intelligence (AI) Clinical Decision Support System (CDSS) Tool
+url: https://ntrs.nasa.gov/citations/20250002755
+id: ntrs-ai-cdss-osce
+
+Authors: Ariana Nelson, Ali Al, Arian Anderson, Jonathan Steller, Truong Le, Lynn Boley, Kurt L Berens, Jay Lemery, David Hilmers
+
+Published: 2025-06-01
+
+Document type: Presentation
+
+<b>BACKGROUND</b>
+Objective Structured Clinical Evaluations (OSCEs) have long been established as a robust methodology for summative assessment of clinical skills and decision-making during medical education. The recent integration of Artificial Intelligence (AI) into clinical decision-making processes has prompted the need for novel evaluation frameworks to assess the efficacy and reliability of AI clinical decision support system (CDSS) tools. This abstract outlines the process of quantitatively evaluating a novel CDSS (“Doc in a Box” Google 2024) trained on curated medical spaceflight data in the psychomotor domain as it interfaces with a human volunteer acting as the crew medical officer (CMO). 
+
+<b>PURPOSE</b>
+The AI CDSS under review was developed as part of the Lunar Command and Control Interoperability (LuCCI) project, which is intended to address a gap in how Lunar Surface Systems (LSS) would interoperate across multiple programs, commercial partners, and international partners. The project objective is to define, prototype, integrate, and evaluate an interoperable lunar command, control, data, and software reference architecture to enable autonomy and informatics capability through common standards across LSS. A multi-modal AI-based CDSS compatible with Federated LSS will assist clinicians in diagnosing and managing complex medical conditions by providing evidence-based recommendations through predictive analytics. Given the critical role of decision-support as NASA continues to evolve its Earth-independent medical operations (EIMO), it is imperative to ensure that such AI tools perform reliably and align with clinical standards during progressive lunar and Martian exploration class missions.
+
+<b>METHODS</b>
+The OSCE framework, traditionally used for evaluating human clinicians, was adapted to assess the AI tool's decision-making capabilities in simulated clinical scenarios.  In this adapted OSCE, the AI CDSS was tested across a series of structured clinical scenarios designed to mimic real-life spaceflight patient cases. These scenarios included a range of conditions and complexities, allowing for comprehensive assessment of the tool's performance. Key evaluation metrics included accuracy of diagnosis, timeliness of decision-making, and appropriate recommendations for therapies. The OSCE was scored by human physician evaluators who assessed the AI's recommendations in comparison with expert clinicians' medical decision making to ensure alignment with best practices and the standard of care.
+
+<b>RESULTS</b>
+Preliminary results indicate that the AI CDSS demonstrated high accuracy in diagnostic recommendations and decision support across various scenarios. However, certain limitations were noted, such as occasional discrepancies in handling complex or nuanced cases that required a more contextual understanding. Additionally, the tool scored higher on the diagnostic portion of the rubric, with lower scores in the therapeutic recommendations. These findings highlight the importance of continuous refinement and validation of AI tools through rigorous evaluation frameworks like the OSCE.
+
+The adaptation of OSCEs for AI tools presents several advantages, including a structured and reproducible approach to evaluation, the ability to test AI systems in diverse clinical scenarios, and the opportunity to benchmark AI performance against established clinical standards to permit charting of future progress as aerospace medicine evolves as a discipline. Remaining challenges include ensuring that these evaluations capture the full spectrum of clinical decision-making scenarios that will be confronted by CMOs during missions and adequately reflecting real-world variability of the austere spaceflight environment.
+
+<b>CONCLUSION</b>
+Employing OSCEs to evaluate AI clinical decision support tools offers a promising approach to validating their clinical utility and efficacy. This methodology not only provides insights into the tool's performance but also fosters ongoing improvement and alignment with standard of care practices. Future research should focus on refining these evaluation processes and addressing limitations to enhance the integration of AI tools in clinical spaceflight settings.

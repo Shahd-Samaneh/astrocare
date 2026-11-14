@@ -1,0 +1,33 @@
+{
+  "_note": "Static list for the pre-model safety filter (assistant/safety.py), on top of the medicine names in the on-board resources. Generic + common brand names and drug classes, English and Arabic (Arabic is matched after normalisation: no diacritics, unified alef/ya/ta marbuta). A match means a fixed CMO reply; the question never reaches the model.",
+  "en": [
+    "paracetamol", "acetaminophen", "tylenol", "panadol", "calpol",
+    "ibuprofen", "advil", "motrin", "nurofen", "brufen",
+    "aspirin", "naproxen", "aleve", "diclofenac", "voltaren",
+    "codeine", "tramadol", "morphine", "oxycodone", "opioid", "opioids",
+    "melatonin", "zolpidem", "ambien", "zopiclone", "temazepam", "diazepam", "valium",
+    "lorazepam", "ativan", "alprazolam", "xanax", "benzodiazepine", "benzodiazepines",
+    "sleeping pill", "sleeping pills", "sleep aid", "sleep aids",
+    "antihistamine", "antihistamines", "diphenhydramine", "benadryl", "loratadine", "claritin",
+    "cetirizine", "zyrtec", "promethazine", "phenergan", "meclizine", "scopolamine",
+    "ondansetron", "zofran", "omeprazole", "nexium", "pseudoephedrine", "sudafed",
+    "amoxicillin", "augmentin", "azithromycin", "zithromax", "ciprofloxacin", "cipro",
+    "antibiotic", "antibiotics", "hydrocortisone", "prednisone", "cortisone", "steroid", "steroids",
+    "modafinil", "provigil", "dextroamphetamine", "adderall", "antidepressant", "antidepressants",
+    "sertraline", "zoloft", "fluoxetine", "prozac", "bisphosphonate", "bisphosphonates", "alendronate"
+  ],
+  "ar": [
+    "باراسيتامول", "براسيتامول", "اسيتامينوفين", "تايلينول", "تيلينول", "بنادول", "بانادول",
+    "ايبوبروفين", "ايبوبروفن", "ادفيل", "بروفين", "نوروفين", "موترين",
+    "اسبرين", "اسبيرين", "نابروكسين", "ديكلوفيناك", "فولتارين",
+    "كودايين", "كوديين", "ترامادول", "مورفين",
+    "ميلاتونين", "زولبيديم", "امبيان", "ديازيبام", "فاليوم", "زاناكس", "البرازولام",
+    "حبوب منومه", "حبوب النوم", "حبه نوم", "منوم", "منومات",
+    "مضاد هيستامين", "مضادات الهيستامين", "مضاد للهيستامين", "لوراتادين", "كلاريتين", "سيتريزين", "زيرتك",
+    "بينادريل", "ديفينهيدرامين", "بروميثازين", "فينيرغان",
+    "اوندانسيترون", "زوفران", "اوميبرازول", "نيكسيوم", "سودوافيدرين", "سودافيد",
+    "اموكسيسيلين", "اوجمنتين", "ازيثرومايسين", "زيثروماكس", "سيبروفلوكساسين", "سيبرو",
+    "مضاد حيوي", "مضادات حيويه", "كورتيزون", "هيدروكورتيزون", "بريدنيزون", "ستيرويد",
+    "مودافينيل", "مضاد اكتئاب", "مضادات الاكتئاب"
+  ]
+}
