@@ -246,3 +246,14 @@ def test_no_input_note_when_baseline_input_unknown(c):
     # seeded (simulated) tests have no input method recorded
     r = c.post("/api/tests", json={"trialsMs": [300, 310, 290], "inputMethod": "touch"}).json()
     assert r["baseline"]["usualInputMethod"] is None and r["inputDiffers"] is False
+
+
+
+# ---- history: within range at the time of each test ------------------------------------------
+def test_history_within_range_per_test(c):
+    tests = {t["id"]: t for t in c.get("/api/tests?n=20").json()}
+    assert tests["pvt-142"]["withinRange"] is False  # ~20 % slower
+    assert tests["pvt-141"]["withinRange"] is False
+    assert tests["pvt-139"]["withinRange"] is True
+    # the first days have < 3 earlier tests (older than 48 h): baseline still building
+    assert all(tests[f"pvt-{d}"]["withinRange"] is None for d in range(129, 134))

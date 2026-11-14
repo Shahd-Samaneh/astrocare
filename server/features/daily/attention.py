@@ -101,8 +101,15 @@ class TestResult(ApiModel):
 
 
 @router.get("/tests")
-def list_tests(n: int = Query(10, gt=0, le=100)) -> list[DailyCognitiveTest]:
-    return load_tests(limit=n)
+def list_tests(n: int = Query(10, gt=0, le=200)) -> list[DailyCognitiveTest]:
+    """Newest first. Each test carries withinRange vs the same-mode baseline at its own time
+    (null while that baseline was still building)."""
+    all_tests = load_tests()
+    out = all_tests[:n]
+    for t in out:
+        base = baseline_from(all_tests, parse_ts(t.ts), mode=t.mode)
+        t.within_range = None if base.building else within(t.median_ms, base)
+    return out
 
 
 @router.get("/tests/baseline")

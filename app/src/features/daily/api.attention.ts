@@ -23,6 +23,8 @@ export interface DailyCognitiveTest extends CognitiveTest {
   /** Response time since the test started, per trial (ms). */
   trialOffsetsMs?: number[] | null;
   measures?: PvtMeasures | null;
+  /** GET /api/tests only: vs the same-mode baseline at this test's time; null = still building. */
+  withinRange?: boolean | null;
 }
 
 export interface AttentionBaseline {

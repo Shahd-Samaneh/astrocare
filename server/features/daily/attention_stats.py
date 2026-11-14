@@ -58,6 +58,8 @@ class DailyCognitiveTest(CognitiveTest):
     input_method: Optional[InputMethod] = None
     trial_offsets_ms: Optional[list[float]] = None  # response time since test start, per trial
     measures: Optional[PvtMeasures] = None  # derived, never stored
+    # derived for GET /api/tests: vs the same-mode baseline as it was at this test's time
+    within_range: Optional[bool] = None
 
 
 class NextStepAction(ApiModel):

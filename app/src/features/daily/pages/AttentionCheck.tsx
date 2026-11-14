@@ -25,6 +25,7 @@ import { EXPERIMENTAL_NOTE, ResultPanel } from '../attention/ResultPanel';
 import { RetestCompare } from '../attention/RetestCompare';
 import { SleepRtChart } from '../attention/SleepRtChart';
 import { SleepinessQuestion } from '../attention/SleepinessQuestion';
+import { TestHistoryTable } from '../attention/TestHistoryTable';
 import { TestRunner } from '../attention/TestRunner';
 import {
   TRIALS,
@@ -50,7 +51,7 @@ export default function AttentionCheck() {
   const retestId = params.get('retest');
   const { status } = useAppStatus();
 
-  const history = useApi<DailyCognitiveTest[]>(paths.tests(100));
+  const history = useApi<DailyCognitiveTest[]>(paths.tests(200));
   const baseline = useApi<AttentionBaseline>(paths.baseline);
   const summary = useApi<DailySummary>(paths.summary(14));
   const thresholds = useApi<DailyThresholds>(paths.thresholds);
@@ -298,6 +299,10 @@ export default function AttentionCheck() {
               />
             )}
           </Card>
+        )}
+
+        {!running && history.data && history.data.length > 0 && (
+          <TestHistoryTable tests={history.data} />
         )}
 
         <NasaBasis
