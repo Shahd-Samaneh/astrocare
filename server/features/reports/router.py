@@ -1,23 +1,28 @@
-"""Reports & comms API (owner: Noora).
+"""Reports & comms API (owner: Noura).
 
-Reports wait in the outbox (status 'queued') until a comm window opens.
 Report items ("Add to report") are used by Monitoring, Daily and the Assistant.
+A report is built from fixed sections, saved as PDF + JSON in data/reports/,
+then waits in the outbox (queued) until a comm window opens (sent).
 """
 from __future__ import annotations
 
 from typing import Literal, Optional
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi.responses import FileResponse
 from pydantic import Field
 
 from server.core import db
-from server.core.config import iso, utcnow
-from server.core.models import ApiModel, Report, ReportSection, ReportStatus
-
+from server.core.models import ApiModel, Report, ReportStatus
 
 from . import service
 
 router = APIRouter(tags=["reports"])
+
+SectionId = Literal[
+    "summary", "alerts", "vitals", "cabin", "sleep", "attention",
+    "exercise", "checkins", "relax", "items", "radiation",
+]
 
 
 # ---- report items (local type until Haya merges it into the contract) -------------
@@ -58,25 +63,54 @@ def delete_item(item_id: str) -> Response:
     return Response(status_code=204)
 
 
-# ---- reports (unchanged for now; rebuilt in noura/reports) ------------------------
+# ---- reports -------------------------------------------------------------------------
+class ReportOut(Report):
+    """Contract Report + when it was sent (null until a comm window sends it)."""
+    sent_ts: Optional[str] = None
+
+
+def _out(row: dict, sent: dict[str, str]) -> ReportOut:
+    return ReportOut.model_validate({**row, "sent_ts": sent.get(row["id"])})
+
+
 @router.get("/reports")
-def list_reports(status: Optional[ReportStatus] = None) -> list[Report]:
+def list_reports(status: Optional[ReportStatus] = None) -> list[ReportOut]:
     rows = db.query("reports", "status = ?", (status,), order_by="created_ts DESC") if status \
         else db.query("reports", order_by="created_ts DESC")
-    return [Report.model_validate(r) for r in rows]
+    sent = service.sent_ts_by_report()
+    return [_out(r, sent) for r in rows]
 
 
 class ReportIn(ApiModel):
-    sections: list[ReportSection] = Field(default_factory=list)
-    status: ReportStatus = "draft"
+    sections: list[SectionId] = Field(min_length=1)
+    item_ids: Optional[list[str]] = None  # null = every pending item (only if 'items' is selected)
 
 
 @router.post("/reports", status_code=201)
-def create_report(body: ReportIn) -> Report:
-    rep = Report(id=db.new_id("rep"), created_ts=iso(utcnow()), status=body.status, sections=body.sections)
-    db.insert("reports", rep.model_dump())
-    db.log_action("crew", "create_report", rep.id)
-    return rep
+def create_report(body: ReportIn) -> ReportOut:
+    row = service.create_report(list(body.sections), body.item_ids)
+    return _out(row, {})
+
+
+@router.get("/reports/{report_id}/file")
+def report_file(report_id: str, format: Literal["pdf", "json"] = Query("pdf")) -> FileResponse:
+    path = service.report_file(report_id, format)
+    if path is None:
+        raise HTTPException(status_code=404, detail="No file for this report")
+    media = "application/pdf" if format == "pdf" else "application/json"
+    return FileResponse(path, media_type=media, filename=f"astrocare-{report_id}.{format}",
+                        content_disposition_type="inline")
+
+
+@router.post("/reports/{report_id}/queue")
+def queue_report(report_id: str) -> ReportOut:
+    try:
+        row = service.queue_report(report_id)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    if row is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return _out(row, service.sent_ts_by_report())
 
 
 # ---- comms window ------------------------------------------------------------------
