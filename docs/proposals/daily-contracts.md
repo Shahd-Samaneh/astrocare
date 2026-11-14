@@ -155,6 +155,24 @@ Checked after `npm run reseed` (step 11 in Shahd's task):
 Nothing else depends on `ci-142` (we searched for `ci-142` and `checkins` in `server/`).
 Also update the docstring at the top of the file: "* no check-in today (R-FAT-01 lists it as missing)".
 
+### 4b. Simulator: make R-CIRC-01 (irregular sleep schedule) visible in the demo (optional)
+
+Checked after `npm run reseed`: bedtimes for nights 140, 141 and 142 are ≈ 22:42, 00:28 and 00:36 (mission time). That's a spread of ≈ 1.9 h, just **under** `daily.sleep_onset_shift_hours` (2 h), so R-CIRC-01 doesn't fire on the seeded data. It is tested on synthetic nights instead (`server/tests/test_daily_circ.py`).
+
+If the team wants it in the demo, move the two short nights' bedtime 30 minutes later (≈ 01:00). Their duration stays ≈ 5 h, so R-SLP-01 and R-FAT-01 are unchanged:
+```diff
+     # ---- sleep windows (needed for heart-rate dips) ---------------------------
+     for d in range(first_day, today + 1):
+         short = d >= today - 1
+-        if short:  # nights 141 and 142: late bedtime, ~5 h
+-            s = day_start(d) + timedelta(minutes=30 + float(rng.normal(0, 10)))
++        if short:  # nights 141 and 142: late bedtime (~01:00), ~5 h
++            s = day_start(d) + timedelta(minutes=60 + float(rng.normal(0, 10)))
+```
+That gives a spread of ≈ 2.3–2.5 h. The random draws are unchanged. The only other effect is that the heart-rate dip during sleep on those two nights also moves 30 minutes later.
+
+Before merging, check that `test_simulator.py::test_last_two_nights_short` still passes (it only checks durations).
+
 ---
 
 ## 5. Small note: `test_health.py`

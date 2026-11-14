@@ -6,7 +6,7 @@
 
 1. `run_rules()`: the engine's existing run function. It creates new alerts and
    skips a rule whose alert is still open.
-2. `sync_daily_alerts()`: for our two rules only (R-SLP-01, R-FAT-01), update the
+2. `sync_daily_alerts()`: for our rules only (R-SLP-01, R-FAT-01, R-CIRC-01), update the
    open alert in place instead of leaving it stale (contract §3 "one open alert
    per rule, each run updates it"):
      * whatChanged / dataUsed / possibleFactors / nextSteps from a fresh evaluation
@@ -29,6 +29,7 @@ from server.core.config import parse_ts
 from server.core.status import mission_clock
 from server.rules.base import RuleContext
 from server.rules.engine import run_rules
+from server.rules.r_circ_01_irregular_schedule import IrregularScheduleRule
 from server.rules.r_fat_01_fatigue_pattern import ALERT_ID_TOKEN, FatiguePatternRule, fatigue_missing
 from server.rules.r_slp_01_short_sleep import ShortSleepRule
 
@@ -84,7 +85,7 @@ def retest_lines(alert: dict[str, Any]) -> list[str]:
 
 def sync_daily_alerts(ctx: RuleContext | None = None) -> None:
     ctx = ctx or RuleContext()
-    for rule in (ShortSleepRule(), FatiguePatternRule()):
+    for rule in (ShortSleepRule(), FatiguePatternRule(), IrregularScheduleRule()):
         alert = open_alert(rule.id)
         if not alert:
             continue

@@ -26,7 +26,7 @@ from .checkins import checkins_summary
 
 router = APIRouter()
 
-DAILY_RULE_PREFIXES = ("R-SLP", "R-FAT", "R-EX")
+DAILY_RULE_PREFIXES = ("R-SLP", "R-FAT", "R-CIRC", "R-EX")
 
 
 # ---- fallbacks until Nadia's service functions exist ---------------------------
