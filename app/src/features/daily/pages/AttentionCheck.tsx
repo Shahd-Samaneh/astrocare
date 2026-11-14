@@ -156,7 +156,7 @@ export default function AttentionCheck() {
             />
           ) : result ? (
             <>
-              <ResultPanel result={result} />
+              <ResultPanel result={result} lapseMs={thresholds.data?.pvt_lapse_ms?.value ?? null} />
               <div className={styles.row}>
                 {retestId && (
                   <Button

@@ -2,6 +2,7 @@
 import { Badge, SimulatedBadge } from '../../../shared/components';
 import type { TestResult } from '../api.attention';
 import { KSS_ANCHORS } from './kss';
+import { TrialPlot } from './TrialPlot';
 import styles from './Attention.module.css';
 
 export const EXPERIMENTAL_NOTE = 'Experimental. Does not decide fitness for duty.';
@@ -21,7 +22,13 @@ function pctText(pct: number | null) {
   return `${pct > 0 ? '+' : '−'}${Math.abs(pct).toFixed(0)} %`;
 }
 
-export function ResultPanel({ result }: { result: TestResult }) {
+export function ResultPanel({
+  result,
+  lapseMs = null,
+}: {
+  result: TestResult;
+  lapseMs?: number | null;
+}) {
   const { test, pctVsBaseline, withinRange, baseline } = result;
   const sleepContext = result.sleepContext ?? { sleptHours: null, hoursAwake: null, source: null };
   const extended = test.mode === 'extended';
@@ -140,6 +147,7 @@ export function ResultPanel({ result }: { result: TestResult }) {
           measured speed can disagree. Both are useful.
         </p>
       )}
+      <TrialPlot test={test} lapseMs={lapseMs} />
       <p className={styles.experimental} role="note">
         {EXPERIMENTAL_NOTE}
       </p>

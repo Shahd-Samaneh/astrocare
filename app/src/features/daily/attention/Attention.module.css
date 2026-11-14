@@ -469,3 +469,17 @@
   font-size: 12px;
   color: var(--text-muted);
 }
+
+/* ---- per-trial plot -------------------------------------------------------------- */
+.subhead {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.swDot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
