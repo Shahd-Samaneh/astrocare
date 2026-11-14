@@ -207,3 +207,18 @@ export interface LatestReading {
   sensorName: string | null;
   sensorStatus: SensorStatus | null;
 }
+
+export interface CabinLatest {
+  metric: CabinMetric;
+  value: number | null;
+  unit: string;
+  ts: string | null;
+  status: 'usual' | 'above_usual' | 'below_usual' | 'missing';
+}
+
+export interface BodySystem {
+  id: string;
+  status: 'stable' | 'review' | 'no_data';
+  text: string;
+  alertId: string | null;
+}
