@@ -38,3 +38,29 @@ def test_python_helper(client):
     from server.features.reports.service import add_report_item, list_report_items
     item = add_report_item("alert", "From Python", "direct call", "monitoring", ref_id="al-9")
     assert item["id"] in [i["id"] for i in list_report_items(pending_only=True)]
+
+    
+
+# ---- comms window ----------------------------------------------------------------
+def test_comms_shape(client):
+    c = client.get("/api/comms").json()
+    for key in ("connected", "nextWindowTs", "windowDurationMin", "queuedCount"):
+        assert key in c, key
+    assert c["windowDurationMin"] == 45
+
+
+def test_simulate_window_sends_queued(client):
+    from server.core import db
+
+    db.update("reports", "rep-142", {"status": "queued"})  # make sure at least one is queued
+    before = client.get("/api/comms").json()["queuedCount"]
+    assert before >= 1
+
+    r = client.post("/api/comms/simulate-window").json()
+    assert "rep-142" in r["sentReportIds"]
+    assert db.get("reports", "rep-142")["status"] == "sent"
+
+    after = client.get("/api/comms").json()
+    assert after["queuedCount"] == 0
+    assert after["connected"] is True and after["simulatedWindow"] is True
+    assert client.get("/api/status").json()["outboxCount"] == 0
