@@ -89,7 +89,6 @@ export default function AttentionCheck() {
   });
   const eyebrow = `Daily · ${status ? `Mission day ${status.missionDay} · ` : ''}${dateText}`;
   const ruleLabel = alert.data?.ruleId ?? 'R-FAT-01';
-  const lastNight = summary.data?.sleep?.lastNight?.hours;
 
   return (
     <>
@@ -127,7 +126,7 @@ export default function AttentionCheck() {
             />
           ) : result ? (
             <>
-              <ResultPanel result={result} lastNightHours={lastNight} />
+              <ResultPanel result={result} />
               <div className={styles.row}>
                 {retestId && (
                   <Button

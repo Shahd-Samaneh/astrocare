@@ -4,7 +4,7 @@
 // The Daily contract extensions (context, relatedAlertId, nextSteps[].action) live here
 // until Haya merges them into shared/types/contracts.ts (docs/proposals/daily-contracts.md).
 import { api } from '../../shared/api/client';
-import type { Alert, CheckIn, CognitiveTest, NextStep } from '../../shared/types/contracts';
+import type { Alert, CheckIn, CognitiveTest, NextStep, Source } from '../../shared/types/contracts';
 
 export type TestContext = 'routine' | 'retest';
 export type TestMode = 'quick' | 'extended';
@@ -26,11 +26,20 @@ export interface AttentionBaseline {
   testIds: string[];
 }
 
+/** From the sleep log: the last sleep session that ended before the test. */
+export interface SleepContext {
+  sleepId: string | null;
+  sleptHours: number | null;
+  hoursAwake: number | null;
+  source: Source | null;
+}
+
 export interface TestResult {
   test: DailyCognitiveTest;
   pctVsBaseline: number | null;
   withinRange: boolean | null;
   baseline: AttentionBaseline;
+  sleepContext: SleepContext;
 }
 
 export interface NewTest {

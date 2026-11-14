@@ -108,3 +108,26 @@ def test_tests_are_newest_first_with_context(c):
     assert len(tests) == 10
     assert [t["ts"] for t in tests] == sorted((t["ts"] for t in tests), reverse=True)
     assert all(t["context"] == "routine" for t in tests)
+
+
+# ---- hours awake (result context) -------------------------------------------------
+def test_sleep_context_hours_awake(c):
+    from server.core import db
+    from server.core.config import parse_ts
+
+    last = db.query("sleep_sessions", order_by='"end" DESC', limit=1)[0]
+    ts = iso(parse_ts(last["end"]) + timedelta(hours=9, minutes=6))
+    ctx = c.post("/api/tests", json={"trialsMs": [300, 310, 290], "ts": ts}).json()["sleepContext"]
+    assert ctx["sleepId"] == last["id"]
+    assert ctx["hoursAwake"] == 9.1
+    assert ctx["sleptHours"] == round(last["duration_min"] / 60, 1)
+    assert ctx["source"] == "simulated"
+
+
+def test_sleep_context_unknown_without_sleep(c):
+    from server.core import db
+
+    with db.connect() as conn:
+        conn.execute("DELETE FROM sleep_sessions")
+    ctx = c.post("/api/tests", json={"trialsMs": [300, 310, 290]}).json()["sleepContext"]
+    assert ctx["hoursAwake"] is None and ctx["sleptHours"] is None

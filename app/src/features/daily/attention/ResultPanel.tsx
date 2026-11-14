@@ -1,5 +1,5 @@
 // Owner: Shahd. Result of one attention test: median, lapses, false starts, % vs baseline.
-import { Badge } from '../../../shared/components';
+import { Badge, SimulatedBadge } from '../../../shared/components';
 import type { TestResult } from '../api.attention';
 import styles from './Attention.module.css';
 
@@ -20,14 +20,9 @@ function pctText(pct: number | null) {
   return `${pct > 0 ? '+' : '−'}${Math.abs(pct).toFixed(0)} %`;
 }
 
-export function ResultPanel({
-  result,
-  lastNightHours,
-}: {
-  result: TestResult;
-  lastNightHours?: number | null;
-}) {
+export function ResultPanel({ result }: { result: TestResult }) {
   const { test, pctVsBaseline, withinRange, baseline } = result;
+  const sleepContext = result.sleepContext ?? { sleptHours: null, hoursAwake: null, source: null };
   return (
     <div className={styles.result}>
       <div className={styles.resultHead}>
@@ -74,11 +69,22 @@ export function ResultPanel({
           </>
         )}
       </p>
-      {lastNightHours != null && (
-        <p className={styles.meta}>
-          Context: last night's sleep was <strong>{lastNightHours.toFixed(1)} h</strong>.
-        </p>
-      )}
+      <p className={styles.meta}>
+        Context (from your sleep log): slept{' '}
+        <strong>
+          {sleepContext.sleptHours != null ? `${sleepContext.sleptHours.toFixed(1)} h` : '—'}
+        </strong>{' '}
+        · awake for{' '}
+        <strong>
+          {sleepContext.hoursAwake != null ? `${Math.round(sleepContext.hoursAwake)} h` : '—'}
+        </strong>
+        {sleepContext.source && (
+          <>
+            {' '}
+            <SimulatedBadge source={sleepContext.source} />
+          </>
+        )}
+      </p>
       <p className={styles.experimental} role="note">
         {EXPERIMENTAL_NOTE}
       </p>

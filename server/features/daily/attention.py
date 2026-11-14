@@ -18,6 +18,7 @@ from pydantic import Field
 from server.core import db
 from server.core.config import iso, parse_ts, utcnow
 from server.core.models import ApiModel
+from server.core.status import mission_clock
 
 from .attention_stats import (
     AttentionBaseline, DailyCognitiveTest, TestContext, baseline_from, load_tests, pct_vs,
@@ -36,11 +37,30 @@ class TestIn(ApiModel):
     ts: Optional[str] = None  # tests and backfill only; the UI never sends it
 
 
+class SleepContext(ApiModel):
+    """From the sleep log: the last sleep session that ended before the test."""
+    sleep_id: Optional[str] = None
+    slept_hours: Optional[float] = None
+    hours_awake: Optional[float] = None  # test time − end of that session
+    source: Optional[str] = None
+
+
+def sleep_context_at(ts: str) -> SleepContext:
+    rows = db.query("sleep_sessions", '"end" <= ?', (ts,), order_by='"end" DESC', limit=1)
+    if not rows:
+        return SleepContext()
+    r = rows[0]
+    awake = (parse_ts(ts) - parse_ts(r["end"])).total_seconds() / 3600
+    return SleepContext(sleep_id=r["id"], slept_hours=round(r["duration_min"] / 60, 1),
+                        hours_awake=round(awake, 1), source=r["source"])
+
+
 class TestResult(ApiModel):
     test: DailyCognitiveTest
     pct_vs_baseline: Optional[float] = None
     within_range: Optional[bool] = None
     baseline: AttentionBaseline
+    sleep_context: SleepContext = SleepContext()
 
 
 @router.get("/tests")
@@ -67,6 +87,7 @@ def add_test(body: TestIn) -> TestResult:
         id=db.new_id("pvt"), ts=ts, trials_ms=valid, median_ms=median, lapses=lapses,
         false_starts=body.false_starts, context=body.context,
         related_alert_id=body.related_alert_id if body.context == "retest" else None,
+        mission_day=mission_clock(parse_ts(ts))[1],
     )
     # Baseline before inserting: the new test never counts towards its own baseline.
     base = baseline_from(load_tests(), parse_ts(ts))
@@ -74,7 +95,8 @@ def add_test(body: TestIn) -> TestResult:
     set_test_context(test.id, test.context, test.related_alert_id)
     db.log_action("crew", "attention_test" if test.context == "routine" else "attention_retest", test.id)
     run_daily_engine()
-    return TestResult(test=test, pct_vs_baseline=pct_vs(median, base), within_range=within(median, base), baseline=base)
+    return TestResult(test=test, pct_vs_baseline=pct_vs(median, base), within_range=within(median, base),
+                      baseline=base, sleep_context=sleep_context_at(ts))
 
 
 def attention_summary(n: int = 10) -> dict:
