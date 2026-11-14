@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from .arabic import ar_n
+from .arabic import ar_n, en_n
 
 METRIC_NAMES = {
     "heart_rate": ("heart rate", "معدل النبض"),
@@ -65,11 +65,11 @@ def build_facts(ctx: dict) -> dict[str, Fact]:
         durs = s.get("durationsMin") or []
         under = s.get("nightsUnderShort")
         short_h = s.get("shortHours")
-        under_en = f"; {under} night(s) under {short_h:g} h" if under is not None and short_h else ""
+        under_en = f"; {en_n(under, 'night')} under {short_h:g} h" if under is not None and short_h else ""
         under_ar = f"؛ {ar_n(under, 'night')} أقل من {ar_n(short_h, 'hour')}" if under is not None and short_h else ""
         facts["sleep"] = Fact(
             "sleep", "user-data:sleep",
-            en=(f"Sleep, last 7 days: {s['nights']} nights recorded; average {s['average']}; "
+            en=(f"Sleep, last 7 days: {en_n(s['nights'], 'night')} recorded; average {s['average']}; "
                 f"shortest {s['shortest']}; last night {s['lastNight']}{under_en}."),
             ar=(f"النوم، آخر 7 أيام: {ar_n(s['nights'], 'night')} مسجّلة؛ المعدل {s['average']}؛ "
                 f"أقصر ليلة {s['shortest']}؛ الليلة الماضية {s['lastNight']}{under_ar}."),
@@ -82,7 +82,7 @@ def build_facts(ctx: dict) -> dict[str, Fact]:
         total_lapses = sum(int(t.get("lapses") or 0) for t in tests)
         facts["attention"] = Fact(
             "attention", "user-data:attention",
-            en=(f"Attention tests, last 7 days: {len(tests)} tests; latest median reaction time "
+            en=(f"Attention tests, last 7 days: {en_n(len(tests), 'test')}; latest median reaction time "
                 f"{last['medianMs']:.0f} ms (first test in the window: {first['medianMs']:.0f} ms); "
                 f"lapses in the latest test: {last.get('lapses') or 0}; lapses over 7 days: {total_lapses}."),
             ar=(f"اختبارات الانتباه، آخر 7 أيام: {ar_n(len(tests), 'test')}؛ آخر متوسط زمن استجابة "

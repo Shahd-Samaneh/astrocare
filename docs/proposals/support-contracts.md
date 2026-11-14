@@ -210,3 +210,50 @@ check** (`assistant_citation_min_similarity`; an uncited general sentence gets "
 citations. The template fallback says whether the model was **too slow** or **not available**, explains the
 **highest-level open alert** (urgent > review > info, newest first), lists missing data once, cites [1] once, lists each
 source once, and uses correct Arabic plurals.
+
+### A12. `AssistantAnswer.nextSteps` + "Add to report" notes
+
+```ts
+interface AnswerStep { text: string; link?: string | null; lockedForCMO: boolean }
+interface AssistantAnswer { /* ...A1... */ nextSteps?: AnswerStep[] }  // mode 'alert' and the alert template
+```
+Same order and wording as the "Next steps" list in the answer text; a CMO-locked step is `"(needs CMO review)"`
+with no link. Every answer now has **Add to report**, which sends Noura's `POST /api/reports/items`
+`{ kind: 'note', title: <question>, text: <answer without the sources list and its [n] markers>, sourceFeature: 'assistant' }`
+(medication refusals keep the CMO button instead). Answers built in code (alert, my data, template) list only the
+sources their text cites, renumbered 1..n, like model answers already did. Alert answers end with
+`Background: [2][3]` (AR `خلفية: [2][3]`), citing each `alert.sources` id that is a `references/<id>.txt` file
+(title and url from its header); ids with no such file are ignored.
+
+### A13. `NextStep.link` (contracts.ts `NextStep` + `core/models.py`), for Haya and the Daily pair
+
+The assistant can show a next step as a button that navigates in the app (`/daily#checkin`,
+`/attention?retest=<alertId>`), but `NextStep` today is only `{ text, resourceId?, availability?, lockedForCMO }`,
+so every step is plain text. Proposal:
+
+```ts
+interface NextStep { text: string; resourceId?: string | null; availability?: Availability | null;
+                     lockedForCMO: boolean; link?: string | null }  // in-app path, starts with "/"
+```
+Once it is merged, the assistant change is one line: `step_link()` in `server/features/assistant/fallback.py`
+returns `step.get("link")`. Only same-app paths are used (a host, a scheme or `//` is dropped), and a
+CMO-locked step never gets a button.
+
+### A14. Deep link `/assistant?q=<text>` (for Haya: "Ask the assistant" on Alert detail and Today)
+
+Opening `/assistant?q=<url-encoded question>` asks that question once, on arrival. `?q` is then removed from the
+URL (replace), so Back or a reload does not ask it again. If another answer is still being written, the question
+is put in the input box instead. Suggested buttons:
+
+```tsx
+// Alert detail: explains exactly this alert (the backend picks the alert by its rule id)
+<Button variant="secondary" to={`/assistant?q=${encodeURIComponent(`Why did I get ${alert.ruleId}?`)}`}>
+  Ask the assistant
+</Button>
+// Today
+<Button variant="secondary" to={`/assistant?q=${encodeURIComponent('What does my data from the last 7 days show?')}`}>
+  Ask the assistant
+</Button>
+```
+The conversation is kept when the user leaves the Assistant page and comes back (and across a reload of the
+same tab: `sessionStorage`), and **Clear chat** empties it.

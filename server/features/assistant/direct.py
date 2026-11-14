@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import re
 
-from .arabic import ar_n
+from .arabic import ar_n, en_n
 from .context import load_raw
 from .facts import METRIC_NAMES, build_facts
-from .fallback import _LEVEL_RANK, build_alert_answer
-from .models import AssistantSource
+from .fallback import _LEVEL_RANK, answer_steps, build_alert_answer, cited_only
+from .models import AnswerStep, AssistantSource
 from .prompt import DATA_SOURCES, is_data_question
 
 __all__ = ["is_alert_question", "is_data_question", "alert_answer", "data_answer", "pick_alert_for"]
@@ -58,14 +58,15 @@ _NO_ALERT = {
 }
 
 
-def alert_answer(question: str, *, arabic: bool) -> tuple[str, list[AssistantSource], list[str], str | None]:
-    """(answer, sources, missing, ruleId). Raw alerts: a CMO-locked step is never shown."""
+def alert_answer(question: str, *, arabic: bool
+                 ) -> tuple[str, list[AssistantSource], list[str], str | None, list[AnswerStep]]:
+    """(answer, sources, missing, ruleId, nextSteps). Raw alerts: a CMO-locked step is never shown."""
     raw, _ = load_raw({"alerts"})
     alert = pick_alert_for(question, raw.get("alerts") or [])
     if not alert:
-        return _NO_ALERT["ar" if arabic else "en"], [], [], None
+        return _NO_ALERT["ar" if arabic else "en"], [], [], None, []
     answer, sources, missing = build_alert_answer(alert, arabic=arabic)
-    return answer, sources, missing, alert.get("ruleId")
+    return answer, sources, missing, alert.get("ruleId"), answer_steps(alert, arabic=arabic)
 
 
 # ---- "my data" summary --------------------------------------------------------------------
@@ -76,8 +77,8 @@ _T = {
         "no_data": "{area}: no data recorded in the last 7 days.",
         "missing_area": "{area}: no data in the last 7 days",
         "missing_vital": "{name}: no reading today",
-        "checkins": "Check-ins, last 7 days: {n} check-in(s), {skipped} skipped; latest mood {mood}/5, stress {stress}/5.",
-        "checkins_all_skipped": "Check-ins, last 7 days: {n} check-in(s), all skipped.",
+        "checkins": "Check-ins, last 7 days: {n}, {skipped} skipped; latest mood {mood}/5, stress {stress}/5.",
+        "checkins_all_skipped": "Check-ins, last 7 days: {n}, all skipped.",
         "areas": {"vitals": "Vital signs", "sleep": "Sleep", "attention": "Attention tests",
                   "exercise": "Exercise", "checkins": "Check-ins"},
     },
@@ -100,7 +101,7 @@ _AREA = {sid: (sid.split(":", 1)[1], key, label) for sid, _title, key, label in 
 
 def _checkins_line(items: list[dict], T: dict, arabic: bool) -> str:
     done = [c for c in items if not c.get("skipped")]
-    n = ar_n(len(items), "checkin") if arabic else len(items)
+    n = ar_n(len(items), "checkin") if arabic else en_n(len(items), "check-in")
     if not done:
         return T["checkins_all_skipped"].format(n=n)
     last = done[-1]
@@ -143,4 +144,5 @@ def data_answer(ctx: dict, *, arabic: bool) -> tuple[str, list[AssistantSource],
                 item = item[:1].upper() + item[1:]
                 if item not in missing:  # bp_sys + bp_dia: one item
                     missing.append(item)
-    return T["head"] + "\n\n" + "\n".join(lines), sources, missing
+    answer, sources = cited_only(T["head"] + "\n\n" + "\n".join(lines), sources)
+    return answer, sources, missing

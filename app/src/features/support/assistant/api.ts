@@ -85,11 +85,5 @@ export async function putPermissions(patch: Partial<{ [G in keyof AssistantPermi
   return (await res.json()) as AssistantPermissions;
 }
 
-/** "Add the question to the report for the CMO" -> Noura's POST /api/reports/items (contracts §1). */
-export const addCmoQuestion = (question: string) =>
-  api.post<unknown>('/reports/items', {
-    kind: 'cmo_question',
-    title: 'Medication question for CMO',
-    text: question,
-    sourceFeature: 'assistant',
-  } satisfies NewReportItem);
+/** Noura's POST /api/reports/items (contracts §1): CMO questions and "Add to report" notes. */
+export const addReportItem = (item: NewReportItem) => api.post<unknown>('/reports/items', item);

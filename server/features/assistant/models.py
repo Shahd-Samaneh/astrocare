@@ -25,6 +25,15 @@ class AssistantSource(ApiModel):
     url: Optional[str] = None
 
 
+class AnswerStep(ApiModel):
+    """One next step of the explained alert. `link` is an in-app path ("/daily#checkin"), only
+    when the alert's NextStep carries one (proposal A13: the field does not exist yet)."""
+
+    text: str
+    link: Optional[str] = None
+    locked_for_cmo: bool = Field(default=False, alias="lockedForCMO")
+
+
 class AssistantAnswer(ApiModel):
     answer: str
     sources: list[AssistantSource] = []
@@ -35,6 +44,7 @@ class AssistantAnswer(ApiModel):
     latency_ms: int
     note: Optional[str] = None           # small notice under the badge (template / slow / cut off)
     alert_rule_id: Optional[str] = None  # mode "alert": the rule the answer explains
+    next_steps: list[AnswerStep] = []    # mode "alert" / alert template: the alert's next steps
 
 
 class AssistantPermissionsGroup(ApiModel):

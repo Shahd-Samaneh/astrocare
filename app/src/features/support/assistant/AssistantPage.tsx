@@ -1,44 +1,34 @@
 // Assistant screen (owner: Marah): local chat with sources, missing info, refusals + CMO button.
+// The conversation lives in chatStore (kept when you leave the page and come back).
+// /assistant?q=<text> asks that question once, on arrival (proposal A14).
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Bot, Send, User } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Bot, Send, Trash2, User } from 'lucide-react';
+import { useApi } from '../../../shared/api/client';
 import { Button, Card, PageHeader } from '../../../shared/components';
-import { askAssistantStream, warmUpAssistant } from './api';
+import type { Alert } from '../../../shared/types/contracts';
+import { warmUpAssistant } from './api';
+import { askQuestion, clearChat, getChat, markReported, useChat, type Turn } from './chatStore';
 import { AnswerText } from './components/AnswerText';
 import { CmoButton } from './components/CmoButton';
 import { ModeBadge } from './components/ModeBadge';
+import { NextSteps } from './components/NextSteps';
+import { ReportButton } from './components/ReportButton';
 import { SourceList } from './components/SourceList';
 import { ModelInfoPanel } from './ModelInfoPanel';
 import { PermissionsPanel } from './PermissionsPanel';
-import type { AssistantAnswer } from './types';
+import { readyQuestions, uiLang } from './readyQuestions';
+import { noteReportItem, stripCitations } from './reportItems';
 import styles from './AssistantPage.module.css';
 
-// After this long the UI says the local model is still working (proposal A5: assistant_slow_reply_ms).
-const SLOW_REPLY_MS = 10000;
-
-const READY_QUESTIONS = [
-  'Why did I get the alert?',
-  'How can sleep loss affect my performance on the mission?',
-  'What does my data from the last 7 days show?',
-  'Can I take melatonin to sleep better?', // shows the medication refusal
-];
-
-interface Turn {
-  id: number;
-  question: string;
-  answer?: AssistantAnswer;
-  partial?: string; // streamed text so far (before the final answer)
-  firstTokenMs?: number | null;
-  error?: string;
-}
-
 export default function AssistantPage() {
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const { turns, busy, slow, answered } = useChat();
   const [draft, setDraft] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [slow, setSlow] = useState(false);
-  const [infoTick, setInfoTick] = useState(0);
-  const nextId = useRef(1);
   const endRef = useRef<HTMLDivElement>(null);
+  const [params, setParams] = useSearchParams();
+  const askedFromUrl = useRef<string | null>(null);
+  const { data: alerts } = useApi<Alert[]>('/alerts', { refreshMs: 60000 });
+  const chips = readyQuestions(alerts, uiLang());
 
   useEffect(() => {
     void warmUpAssistant(); // load the models while the user reads the screen
@@ -48,43 +38,28 @@ export default function AssistantPage() {
     endRef.current?.scrollIntoView?.({ block: 'end', behavior: 'smooth' });
   }, [turns, slow]);
 
-  async function ask(question: string) {
-    const q = question.trim();
-    if (!q || busy) return;
-    const id = nextId.current++;
-    setTurns((t) => [...t, { id, question: q }]);
-    setDraft('');
-    setBusy(true);
-    setSlow(false);
-    const timer = window.setTimeout(() => setSlow(true), SLOW_REPLY_MS);
-    try {
-      const update = (f: (x: Turn) => Turn) => setTurns((t) => t.map((x) => (x.id === id ? f(x) : x)));
-      const answer = await askAssistantStream(q, (ev) => {
-        if (ev.type === 'token') {
-          window.clearTimeout(timer);
-          setSlow(false);
-          update((x) => ({ ...x, partial: (x.partial ?? '') + ev.text }));
-        } else if (ev.type === 'reset') {
-          update((x) => ({ ...x, partial: undefined }));
-        } else {
-          update((x) => ({ ...x, answer: ev.answer, partial: undefined, firstTokenMs: ev.stats?.firstTokenMs ?? null }));
-        }
-      });
-      update((x) => (x.answer ? x : { ...x, answer, partial: undefined }));
-    } catch (e) {
-      const msg = (e as Error).message || 'Unknown error';
-      setTurns((t) => t.map((x) => (x.id === id ? { ...x, error: msg } : x)));
-    } finally {
-      window.clearTimeout(timer);
-      setBusy(false);
-      setSlow(false);
-      setInfoTick((n) => n + 1); // refresh measured latency / tokens per second
+  // /assistant?q=...: ask it once, then drop ?q from the URL (replace: Back and reload don't re-ask)
+  useEffect(() => {
+    const q = params.get('q')?.trim();
+    if (!q) {
+      askedFromUrl.current = null; // ?q is gone: the same link may ask again later
+      return;
     }
+    if (askedFromUrl.current === q) return; // StrictMode runs this effect twice: ask once
+    askedFromUrl.current = q;
+    const next = new URLSearchParams(params);
+    next.delete('q');
+    setParams(next, { replace: true });
+    if (getChat().busy || !askQuestion(q)) setDraft(q); // another answer is still coming: keep it ready to send
+  }, [params, setParams]);
+
+  function ask(question: string) {
+    if (askQuestion(question)) setDraft('');
   }
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    void ask(draft);
+    ask(draft);
   }
 
   return (
@@ -96,10 +71,24 @@ export default function AssistantPage() {
           title="Ask about your data"
           subtitle="Answers use only your data and the NASA/CSA references on board. No medication, dose or diagnosis advice."
           className={styles.chatCard}
+          actions={
+            turns.length > 0 && (
+              <Button variant="ghost" icon={<Trash2 size={16} />} onClick={clearChat} disabled={busy}>
+                Clear chat
+              </Button>
+            )
+          }
         >
           <div className={styles.ready} role="group" aria-label="Ready-made questions">
-            {READY_QUESTIONS.map((q) => (
-              <Button key={q} variant="secondary" onClick={() => void ask(q)} disabled={busy} className={styles.readyBtn}>
+            {chips.map((q) => (
+              <Button
+                key={q}
+                variant="secondary"
+                onClick={() => ask(q)}
+                disabled={busy}
+                className={styles.readyBtn}
+                dir="auto"
+              >
                 {q}
               </Button>
             ))}
@@ -110,46 +99,7 @@ export default function AssistantPage() {
               <p className={styles.empty}>Pick a question above or type your own. You can ask in English or Arabic.</p>
             )}
             {turns.map((t) => (
-              <div key={t.id} className={styles.turn}>
-                <div className={`${styles.msg} ${styles.user}`}>
-                  <User size={16} aria-hidden className={styles.avatar} />
-                  <span className="sr-only">You asked: </span>
-                  <p className={styles.question} dir="auto">
-                    {t.question}
-                  </p>
-                </div>
-                <div className={`${styles.msg} ${styles.bot}`}>
-                  <Bot size={16} aria-hidden className={styles.avatar} />
-                  <div className={styles.botBody}>
-                    {!t.answer && !t.error && t.partial && (
-                      <div className={styles.answerWrap} aria-busy="true">
-                        <AnswerText text={stripCitations(t.partial)} />
-                        <span className={styles.writing} role="status">
-                          Writing on this device…
-                        </span>
-                      </div>
-                    )}
-                    {!t.answer && !t.error && !t.partial && (
-                      <div role="status" className={styles.thinking}>
-                        <span className={styles.dots} aria-hidden>
-                          <span />
-                          <span />
-                          <span />
-                        </span>
-                        {slow
-                          ? 'The local model is reading your data and the references…'
-                          : 'Thinking on this device…'}
-                      </div>
-                    )}
-                    {t.error && (
-                      <div role="alert" className={styles.error}>
-                        The assistant is not reachable right now ({t.error}). Check that the local AstroCare service is running.
-                      </div>
-                    )}
-                    {t.answer && <AnswerView question={t.question} answer={t.answer} firstTokenMs={t.firstTokenMs} />}
-                  </div>
-                </div>
-              </div>
+              <TurnView key={t.id} turn={t} slow={slow} />
             ))}
             <div ref={endRef} />
           </div>
@@ -170,7 +120,7 @@ export default function AssistantPage() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  void ask(draft);
+                  ask(draft);
                 }
               }}
             />
@@ -181,7 +131,7 @@ export default function AssistantPage() {
         </Card>
 
         <aside className={styles.side} aria-label="Assistant settings">
-          <ModelInfoPanel refreshKey={infoTick} />
+          <ModelInfoPanel refreshKey={answered} />
           <PermissionsPanel />
         </aside>
       </div>
@@ -189,19 +139,59 @@ export default function AssistantPage() {
   );
 }
 
-// While streaming, the model's own [n] numbers are hidden: the final answer renumbers them
-// to match the source list.
-const stripCitations = (s: string) => s.replace(/\s*\[\d+(?:,\s*\d+)*\]/g, '');
+function TurnView({ turn: t, slow }: { turn: Turn; slow: boolean }) {
+  const pending = !t.answer && !t.error && !t.interrupted;
+  return (
+    <div className={styles.turn}>
+      <div className={`${styles.msg} ${styles.user}`}>
+        <User size={16} aria-hidden className={styles.avatar} />
+        <span className="sr-only">You asked: </span>
+        <p className={styles.question} dir="auto">
+          {t.question}
+        </p>
+      </div>
+      <div className={`${styles.msg} ${styles.bot}`}>
+        <Bot size={16} aria-hidden className={styles.avatar} />
+        <div className={styles.botBody}>
+          {pending && t.partial && (
+            <div className={styles.answerWrap} aria-busy="true">
+              {/* while streaming, the model's own [n] numbers are hidden: the final answer renumbers them */}
+              <AnswerText text={stripCitations(t.partial)} />
+              <span className={styles.writing} role="status">
+                Writing on this device…
+              </span>
+            </div>
+          )}
+          {pending && !t.partial && (
+            <div role="status" className={styles.thinking}>
+              <span className={styles.dots} aria-hidden>
+                <span />
+                <span />
+                <span />
+              </span>
+              {slow ? 'The local model is reading your data and the references…' : 'Thinking on this device…'}
+            </div>
+          )}
+          {t.error && (
+            <div role="alert" className={styles.error}>
+              The assistant is not reachable right now ({t.error}). Check that the local AstroCare service is running.
+            </div>
+          )}
+          {t.interrupted && !t.answer && !t.error && (
+            <p className={styles.note}>This question was still being answered when the page reloaded. Ask it again.</p>
+          )}
+          {t.answer && <AnswerView turn={t} />}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-function AnswerView({
-  question,
-  answer,
-  firstTokenMs,
-}: {
-  question: string;
-  answer: AssistantAnswer;
-  firstTokenMs?: number | null;
-}) {
+function AnswerView({ turn }: { turn: Turn }) {
+  const { question, firstTokenMs, reported } = turn;
+  const answer = turn.answer!;
+  const cmo = answer.refused && answer.refusalReason === 'medication';
+  const onDone = () => markReported(turn.id);
   return (
     <div className={styles.answerWrap}>
       <div className={styles.meta}>
@@ -220,11 +210,12 @@ function AnswerView({
       {answer.refused ? (
         <div className={styles.refusal} role="note">
           <AnswerText text={answer.answer} />
-          {answer.refusalReason === 'medication' && <CmoButton question={question} />}
+          {cmo && <CmoButton question={question} done={reported} onDone={onDone} />}
         </div>
       ) : (
         <AnswerText text={answer.answer} />
       )}
+      <NextSteps steps={answer.nextSteps} />
 
       {answer.missing.length > 0 && (
         <p className={styles.missing}>
@@ -232,6 +223,18 @@ function AnswerView({
         </p>
       )}
       <SourceList sources={answer.sources} />
+      {/* a medication refusal already has its CMO button (which also adds to the report) */}
+      {!cmo && (
+        <ReportButton
+          item={noteReportItem(question, answer)}
+          label="Add to report"
+          doneText="Added to the report."
+          what="answer"
+          variant="ghost"
+          done={reported}
+          onDone={onDone}
+        />
+      )}
     </div>
   );
 }

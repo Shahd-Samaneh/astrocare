@@ -23,7 +23,7 @@ from typing import Any, Iterator
 from . import llm, store
 from .context import build_context, latest_alert
 from .direct import alert_answer, data_answer, is_alert_question
-from .fallback import build_fallback, dedupe, fallback_note
+from .fallback import answer_steps, build_fallback, dedupe, fallback_note
 from .models import AssistantAnswer, AssistantSource
 from .prompt import CITE_ANY, SYSTEM_PROMPT, build_prompt, is_data_question, parse_answer, user_data_prefix
 from .retrieval import retrieve
@@ -141,9 +141,9 @@ def answer_events(
     if reason:
         out = _refusal(question, reason, t0)
     elif is_alert_question(question):  # built from the alert's own fields: no model, instant
-        answer, sources, missing, rule_id = alert_answer(question, arabic=arabic)
+        answer, sources, missing, rule_id, steps = alert_answer(question, arabic=arabic)
         out = AssistantAnswer(answer=answer, sources=sources, missing=missing, refused=False, mode="alert",
-                              alert_rule_id=rule_id, latency_ms=_ms(t0))
+                              alert_rule_id=rule_id, next_steps=steps, latency_ms=_ms(t0))
     elif is_data_question(question):  # built from the fixed facts: no model, instant
         answer, sources, missing = data_answer(build_context(), arabic=arabic)
         out = AssistantAnswer(answer=answer, sources=sources, missing=missing, refused=False, mode="data",
@@ -195,9 +195,11 @@ def answer_events(
                 )
         except llm.OllamaError as e:  # Ollama off, error, or no first token in time
             reason = "slow" if isinstance(e, llm.FirstTokenTimeout) else "unavailable"
-            answer, sources, missing = build_fallback(latest_alert(), arabic=arabic, reason=reason)
+            alert = latest_alert()
+            answer, sources, missing = build_fallback(alert, arabic=arabic, reason=reason)
             out = AssistantAnswer(answer=answer, sources=sources, missing=missing, refused=False,
-                                  mode="fallback", note=fallback_note(reason, arabic=arabic), latency_ms=_ms(t0))
+                                  mode="fallback", note=fallback_note(reason, arabic=arabic),
+                                  next_steps=answer_steps(alert, arabic=arabic), latency_ms=_ms(t0))
 
     first_ms = result.first_token_ms if result and out.mode == "llm" else None
     store.log_answer(question, out.latency_ms, out.mode, out.refused, out.refusal_reason,

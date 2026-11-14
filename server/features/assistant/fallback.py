@@ -9,11 +9,14 @@
 """
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Literal
 
-from . import store
-from .arabic import ar_n
-from .models import AssistantSource
+from server.core.config import REFERENCES_DIR
+
+from .arabic import ar_n, en_n
+from .models import AnswerStep, AssistantSource
 
 FallbackReason = Literal["slow", "unavailable"]
 
@@ -25,7 +28,7 @@ _LABELS = {
         "factors": "Possible factors (a possible link, not a confirmed cause)", "next": "Next steps",
         "locked": "needs CMO review", "none": "none",
         "no_alert": "There is no open alert to explain right now. Try again in a moment.",
-        "see_missing": "see the missing information below",
+        "see_missing": "see the missing information below", "background": "Background",
     },
     "ar": {
         "intro_slow": "الموديل المحلي بطيء كتير هلق، فهاد شرح جاهز (قالب) لأهم تنبيه مفتوح عندك.",
@@ -34,7 +37,7 @@ _LABELS = {
         "factors": "عوامل محتملة (ارتباط محتمل، مش سبب مؤكد)", "next": "الخطوات الجاية",
         "locked": "بحاجة لمراجعة الـ CMO", "none": "ما في",
         "no_alert": "ما في تنبيه مفتوح لشرحه هلق. جرّب كمان شوي.",
-        "see_missing": "شوف المعلومات الناقصة تحت",
+        "see_missing": "شوف المعلومات الناقصة تحت", "background": "خلفية",
     },
 }
 
@@ -81,29 +84,76 @@ def build_alert_answer(alert: dict, *, arabic: bool) -> tuple[str, list[Assistan
         steps.append(f"({L['locked']})" if s.get("lockedForCMO") else s.get("text", ""))
     steps = dedupe(steps)
     n_used = len(alert.get("dataUsed") or [])
-    used = ar_n(n_used, "reading") if arabic else f"{n_used} reading{'' if n_used == 1 else 's'}"
+    used = ar_n(n_used, "reading") if arabic else en_n(n_used, "reading")
     missing = dedupe(alert.get("missing") or [])
     if missing:
         used += f" ({L['see_missing']})"
 
-    answer = "\n\n".join([
+    sources = [AssistantSource(id=f"alert:{alert.get('id')}", title=f"{L['alert']} {alert.get('ruleId')}: {alert.get('title')}")]
+    # the alert's sources[] that are references/<id>.txt files (unknown ids are ignored)
+    refs = reference_meta()
+    for src in dict.fromkeys(str(s) for s in alert.get("sources") or []):
+        if src in refs:
+            title, url = refs[src]
+            sources.append(AssistantSource(id=src, title=title, url=url))
+    sources = dedupe_sources(sources)
+
+    parts = [
         f"**{L['alert']} {alert.get('ruleId')}: {alert.get('title')}**",
         f"**{L['changed']}:** {str(alert.get('whatChanged') or '').rstrip('. ')} [1].",
         f"**{L['data']}:** {used}",
         f"**{L['factors']}:**\n{bullets(dedupe(alert.get('possibleFactors') or []))}",
         f"**{L['next']}:**\n{bullets(steps)}",
-    ])
+    ]
+    if len(sources) > 1:  # "Background: [2][3]"
+        parts.append(f"{L['background']}: " + "".join(f"[{n}]" for n in range(2, len(sources) + 1)))
+    answer, cited = cited_only("\n\n".join(parts), sources)
+    return answer, cited, missing
 
-    sources = [AssistantSource(id=f"alert:{alert.get('id')}", title=f"{L['alert']} {alert.get('ruleId')}: {alert.get('title')}")]
-    refs = store.source_meta()
-    for i, src in enumerate(alert.get("sources") or []):
-        src = str(src)
-        if src in refs:  # a reference id (same ids as references/<id>.txt)
-            title, url = refs[src]
-            sources.append(AssistantSource(id=src, title=title, url=url))
-        else:
-            sources.append(AssistantSource(id=f"alert-source:{i}", title=src))
-    return answer, dedupe_sources(sources), missing
+
+def reference_meta(ref_dir: Path | None = None) -> dict[str, tuple[str, str | None]]:
+    """id -> (title, url) of every references/*.txt file, from its header (no index needed)."""
+    from .ingest import parse_reference  # local import: ingest is a dev-time module
+
+    out: dict[str, tuple[str, str | None]] = {}
+    for path in sorted((ref_dir or REFERENCES_DIR).glob("*.txt")):
+        try:
+            doc = parse_reference(path)
+        except (OSError, UnicodeDecodeError):
+            continue
+        out[doc.source_id] = (doc.title, doc.url)
+    return out
+
+
+def step_link(step: dict) -> str | None:
+    """In-app link for a next step, shown as a button. The NextStep contract (contracts.ts /
+    core/models.py) only has text, resourceId, availability and lockedForCMO: no link field yet
+    (proposal A13), so every step is plain text for now. Once the field exists, return it here."""
+    return None
+
+
+def answer_steps(alert: dict | None, *, arabic: bool) -> list[AnswerStep]:
+    """The alert's next steps, in the same order and wording as the answer text. A CMO-locked
+    step never shows its text and never gets a link."""
+    if not alert:
+        return []
+    L = _LABELS["ar" if arabic else "en"]
+    out: list[AnswerStep] = []
+    seen: set[str] = set()
+    for s in alert.get("nextSteps") or []:
+        locked = bool(s.get("lockedForCMO"))
+        text = f"({L['locked']})" if locked else str(s.get("text", ""))
+        key = " ".join(text.split()).casefold().rstrip(".")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(AnswerStep(text=text, link=None if locked else _in_app(step_link(s)), locked_for_cmo=locked))
+    return out
+
+
+def _in_app(link: str | None) -> str | None:
+    """Only same-app paths ("/daily#checkin", "/attention?retest=al-1"), never a host or scheme."""
+    return link if link and link.startswith("/") and not link.startswith("//") else None
 
 
 def build_fallback(alert: dict | None, *, arabic: bool,
@@ -114,6 +164,28 @@ def build_fallback(alert: dict | None, *, arabic: bool,
     if not alert:
         return L["no_alert"], [], []
     return build_alert_answer(alert, arabic=arabic)
+
+
+_CITE_GROUP = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+
+
+def cited_only(answer: str, sources: list[AssistantSource]) -> tuple[str, list[AssistantSource]]:
+    """Keep only the sources the answer text cites, renumbered 1..n in first-cited order.
+    A citation to a number with no source is removed. Used for every answer built in code."""
+    order: list[int] = []
+    for m in _CITE_GROUP.finditer(answer):
+        for part in m.group(1).split(","):
+            idx = int(part) - 1
+            if 0 <= idx < len(sources) and idx not in order:
+                order.append(idx)
+    new_num = {old: new + 1 for new, old in enumerate(order)}
+
+    def renumber(m: re.Match[str]) -> str:
+        nums = [new_num[int(p) - 1] for p in m.group(1).split(",") if int(p) - 1 in new_num]
+        return f"[{', '.join(str(n) for n in dict.fromkeys(nums))}]" if nums else "\x00"
+
+    text = re.sub(r"[ \t]*\x00", "", _CITE_GROUP.sub(renumber, answer))  # "word [9]." -> "word."
+    return text, [sources[i] for i in order]
 
 
 def dedupe_sources(sources: list[AssistantSource]) -> list[AssistantSource]:

@@ -12,6 +12,15 @@ export interface AssistantSource {
   url?: string | null;
 }
 
+// One next step of the explained alert (mode 'alert' / alert template). `link` is an in-app path
+// ("/daily#checkin"), only when the alert's NextStep has one: contracts.ts has no such field yet
+// (proposal A13), so today every step is plain text.
+export interface AnswerStep {
+  text: string;
+  link?: string | null;
+  lockedForCMO: boolean;
+}
+
 export interface AssistantAnswer {
   answer: string;
   sources: AssistantSource[];
@@ -22,6 +31,7 @@ export interface AssistantAnswer {
   latencyMs: number;
   note?: string | null; // small notice under the badge (template / too slow / cut off)
   alertRuleId?: string | null; // mode 'alert': the rule the answer explains
+  nextSteps?: AnswerStep[]; // mode 'alert' / alert template (missing on older servers)
 }
 
 export interface AssistantPermissions {
@@ -46,7 +56,7 @@ export interface AssistantInfo {
 
 // Noura's report items (contracts §1), only the part the assistant sends.
 export interface NewReportItem {
-  kind: 'cmo_question';
+  kind: 'cmo_question' | 'note';
   title: string;
   text: string;
   sourceFeature: 'assistant';

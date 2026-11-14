@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import socket
+import sys
 import threading
 
 import pytest
@@ -322,7 +323,7 @@ def test_data_question_is_answered_from_fixed_facts_without_model(client, monkey
     assert [s["id"] for s in body["sources"]] == ["user-data:vitals", "user-data:sleep",
                                                     "user-data:attention", "user-data:exercise"]
     assert "- Vital signs: up to date: heart rate, SpO₂, respiration rate" in a and a.count("[1]") == 1
-    assert "- Sleep, last 7 days: 5 nights recorded; average 6 h 01 m" in a and "3 night(s) under 6 h [2]" in a
+    assert "- Sleep, last 7 days: 5 nights recorded; average 6 h 01 m" in a and "3 nights under 6 h [2]" in a
     assert "latest median reaction time 338 ms" in a and "[3]" in a
     assert "- Exercise today: planned Resistive exercise (ARED) (60 min); not logged yet [4]" in a
     assert "- Check-ins: not shared with the assistant (permission off)." in a  # permission off: no data
@@ -345,7 +346,7 @@ def test_data_answer_respects_permissions(client, monkeypatch, mock_ctx):
     a = body["answer"]
     assert "- Sleep: not shared with the assistant (permission off)." in a and "5 nights" not in a
     assert "user-data:sleep" not in [s["id"] for s in body["sources"]]
-    assert "Check-ins, last 7 days: 1 check-in(s), 0 skipped; latest mood 3/5, stress 4/5" in a
+    assert "Check-ins, last 7 days: 1 check-in, 0 skipped; latest mood 3/5, stress 4/5" in a
     assert "PRIVATE-NOTE" not in a
 
 
@@ -536,7 +537,7 @@ def test_fixed_facts_are_computed_in_code_and_shown_in_prompt(client, fake_chat,
     client.post("/api/assistant/ask", json={"question": "How am I sleeping?"})
     _, user = fake_chat.calls[0]
     assert ("FIXED FACT: Sleep, last 7 days: 5 nights recorded; average 6 h 01 m; shortest 5 h 20 m; "
-            "last night 5 h 20 m; 3 night(s) under 6 h.") in user
+            "last night 5 h 20 m; 3 nights under 6 h.") in user
     assert ("FIXED FACT: Attention tests, last 7 days: 2 tests; latest median reaction time 338 ms "
             "(first test in the window: 281 ms); lapses in the latest test: 1; lapses over 7 days: 1.") in user
     assert "FIXED FACT: Vital signs: up to date: heart rate, SpO₂, respiration rate; stale: skin temperature" in user
@@ -621,10 +622,10 @@ def test_first_token_timeout_is_30s():
 
 def test_echoed_fixed_fact_gets_its_citation_and_loses_the_label(client, fake_chat, mock_ctx):
     fake_chat.reply = ("Sleep loss is a spaceflight risk.\n\nFIXED FACT: Sleep, last 7 days: 5 nights recorded; "
-                       "average 6 h 01 m; shortest 5 h 20 m; last night 5 h 20 m; 3 night(s) under 6 h.\nMISSING: none")
+                       "average 6 h 01 m; shortest 5 h 20 m; last night 5 h 20 m; 3 nights under 6 h.\nMISSING: none")
     body = client.post("/api/assistant/ask", json={"question": "How can sleep loss affect me?"}).json()
     assert "FIXED FACT" not in body["answer"]
-    assert "3 night(s) under 6 h [1]." in body["answer"]
+    assert "3 nights under 6 h [1]." in body["answer"]
     assert [s["id"] for s in body["sources"]] == ["user-data:sleep"]
 
 
@@ -679,7 +680,7 @@ def test_fallback_has_no_duplicate_missing_items_or_sources(client):
     assert "BP: no reading" not in answer                            # not repeated in the text
     assert answer.count("[1]") == 2                                  # what changed + end of the factor list
     assert "- f [1]" in answer and answer.count("- f") == 1
-    assert [s.title for s in sources] == ["Alert R-T: T", "note A"]  # each source once
+    assert [s.title for s in sources] == ["Alert R-T: T"]  # each source once; the uncited "note A" is not listed
 
 
 def test_arabic_plurals():
@@ -900,7 +901,7 @@ def test_no_irregularities_is_replaced_when_nights_were_short(client, fake_chat,
     fake_chat.reply = f"{wrong} Keep resting.\nMISSING: none"  # mock: 3 nights under 6 h
     body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
     assert wrong.rstrip(".") not in body["answer"]
-    assert "3 night(s) under 6 h" in body["answer"] and "Keep resting." in body["answer"]
+    assert "3 nights under 6 h" in body["answer"] and "Keep resting." in body["answer"]
 
 
 def test_general_no_sleep_problems_sentence_is_kept(client, fake_chat, mock_ctx):
@@ -944,3 +945,154 @@ def test_label_with_text_after_it_is_kept(client, fake_chat, mock_ctx):
 def test_hard_stop_is_120s():
     from server.features.assistant.settings import setting
     assert setting("assistant_max_answer_sec") == 120
+
+
+# ---- English plurals -----------------------------------------------------------------------
+def test_english_plurals():
+    from server.features.assistant.arabic import en_n
+    assert [en_n(n, "night") for n in (0, 1, 2, 5)] == ["0 nights", "1 night", "2 nights", "5 nights"]
+    assert en_n(1, "check-in") == "1 check-in" and en_n(3, "check-in") == "3 check-ins"
+    assert en_n(1, "reading") == "1 reading" and en_n(1.5, "hour") == "1.5 hours"
+
+
+def test_english_plurals_in_fixed_texts():
+    from server.features.assistant.direct import _T, _checkins_line
+    from server.features.assistant.facts import build_facts
+    from server.features.assistant.fallback import build_alert_answer
+    ctx = {"sleep7d": {"nights": 1, "average": "6 h", "shortest": "6 h", "lastNight": "6 h", "durationsMin": [360],
+                       "nightsUnderShort": 1, "shortHours": 6},
+           "attention7d": [{"medianMs": 300, "lapses": 0}]}
+    facts = build_facts(ctx)
+    assert "1 night recorded" in facts["sleep"].en and "; 1 night under 6 h" in facts["sleep"].en
+    assert "1 test;" in facts["attention"].en and "(s)" not in facts["sleep"].en
+    line = _checkins_line([{"mood": 3, "stress": 2, "skipped": False}], _T["en"], False)
+    assert "1 check-in, 0 skipped" in line
+    alert = {"id": "x", "ruleId": "R", "title": "T", "whatChanged": "w", "dataUsed": ["r1"], "missing": [],
+             "possibleFactors": [], "nextSteps": [], "sources": []}
+    assert "**Data used:** 1 reading" in build_alert_answer(alert, arabic=False)[0]
+
+
+# ---- only cited sources are listed (answers built in code too) -----------------------------
+def test_cited_only_keeps_and_renumbers_cited_sources():
+    from server.features.assistant.fallback import cited_only
+    from server.features.assistant.models import AssistantSource as S
+    srcs = [S(id="a", title="A"), S(id="b", title="B"), S(id="c", title="C")]
+    text, kept = cited_only("One [3]. Two [1, 3]. Bad [9]. End", srcs)
+    assert [s.id for s in kept] == ["c", "a"]
+    assert text == "One [1]. Two [2, 1]. Bad. End"
+    assert cited_only("No citations.", srcs) == ("No citations.", [])
+
+
+def test_alert_answer_lists_only_cited_sources(client, monkeypatch, mock_ctx):
+    _no_model(monkeypatch)
+    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    cited = {int(n) for g in re.findall(r"\[(\d+(?:,\s*\d+)*)\]", body["answer"]) for n in g.split(",")}
+    assert cited == set(range(1, len(body["sources"]) + 1))
+
+
+def test_alert_answer_ends_with_background_references(client, monkeypatch, mock_ctx):
+    _no_model(monkeypatch)
+    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    assert body["answer"].endswith("\n\nBackground: [2][3]")
+    assert [s["id"] for s in body["sources"]] == ["alert:al-mock-fat01", "nasa-hrp-sleep-risk", "nasa-pvt-iss"]
+    titles = {s["id"]: s["title"] for s in body["sources"]}
+    assert titles["nasa-hrp-sleep-risk"] != "nasa-hrp-sleep-risk"  # the title from references/<id>.txt
+    ar = client.post("/api/assistant/ask", json={"question": "ليش طلعلي التنبيه؟"}).json()
+    assert ar["answer"].endswith("\n\nخلفية: [2][3]") and len(ar["sources"]) == 3
+
+
+def test_background_ignores_ids_not_in_references(client):
+    from server.features.assistant.fallback import build_alert_answer, reference_meta
+    refs = reference_meta()
+    alert = {"id": "x", "ruleId": "R-T", "title": "T", "whatChanged": "w", "dataUsed": [], "missing": [],
+             "possibleFactors": [], "nextSteps": [],
+             "sources": ["no-such-ref", "nasa-pvt-iss", "free text note", "nasa-pvt-iss"]}
+    answer, sources, _ = build_alert_answer(alert, arabic=False)
+    assert answer.endswith("Background: [2]")
+    assert [(s.id, s.title) for s in sources] == [("alert:x", "Alert R-T: T"), ("nasa-pvt-iss", refs["nasa-pvt-iss"][0])]
+    alert["sources"] = ["no-such-ref"]
+    answer, sources, _ = build_alert_answer(alert, arabic=False)
+    assert "Background" not in answer and len(sources) == 1
+
+
+def test_data_answer_lists_only_cited_sources(client, monkeypatch, mock_ctx):
+    _no_model(monkeypatch)
+    body = client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"}).json()
+    cited = {int(n) for g in re.findall(r"\[(\d+(?:,\s*\d+)*)\]", body["answer"]) for n in g.split(",")}
+    assert cited == set(range(1, len(body["sources"]) + 1))
+
+
+# ---- next steps as actions -----------------------------------------------------------------
+def test_alert_answer_returns_next_steps_as_plain_text_without_a_link_field(client, monkeypatch, mock_ctx):
+    _no_model(monkeypatch)
+    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    assert body["nextSteps"] == [
+        {"text": "Protect an 8-hour sleep opportunity tonight", "link": None, "lockedForCMO": False},
+        {"text": "Repeat the attention check after rest", "link": None, "lockedForCMO": False},
+        {"text": "(needs CMO review)", "link": None, "lockedForCMO": True},  # locked: no medicine name, no link
+    ]
+
+
+def test_next_step_link_is_in_app_only_and_never_on_a_locked_step(monkeypatch):
+    from server.features.assistant import fallback
+    links = {"a": "/daily#checkin", "b": "https://example.org/x", "c": "//evil/x", "d": "/attention?retest=al-1"}
+    monkeypatch.setattr(fallback, "step_link", lambda s: links.get(s["text"]))
+    alert = {"nextSteps": [{"text": "a"}, {"text": "b"}, {"text": "c"},
+                           {"text": "d", "lockedForCMO": True}]}
+    steps = fallback.answer_steps(alert, arabic=False)
+    assert [(s.text, s.link) for s in steps] == [("a", "/daily#checkin"), ("b", None), ("c", None),
+                                                 ("(needs CMO review)", None)]
+
+
+# ---- scripts/demo_check.py (Ollama mocked) -------------------------------------------------
+def _demo_check_module():
+    import importlib.util
+    from pathlib import Path
+    path = Path(__file__).resolve().parents[2] / "scripts" / "demo_check.py"
+    spec = importlib.util.spec_from_file_location("demo_check", path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["demo_check"] = mod  # @dataclass needs its module registered
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_demo_check_all_green_with_mocked_ollama(client, monkeypatch, fake_chat, mock_ctx):
+    from server.features.assistant.settings import chat_model, ollama_cfg
+    dc = _demo_check_module()
+    fake_chat.reply = "Sleep loss slows reaction time [1].\nMISSING: none"
+    monkeypatch.setattr(llm, "tags", lambda timeout=1.5: [{"name": chat_model()},
+                                                           {"name": ollama_cfg()["embed_model"] + ":latest"}])
+    monkeypatch.setattr(llm, "embed", lambda *a, **k: (_ for _ in ()).throw(llm.OllamaError("off")))
+    monkeypatch.setattr(service, "prime_cache", lambda: True)
+    counts = iter([0, 7])  # empty index -> ingest runs -> 7 chunks
+    monkeypatch.setattr(store, "chunk_count", lambda: next(counts))
+    ingested = []
+    monkeypatch.setattr(ingest, "ingest", lambda: ingested.append(1) or {"sources": 2, "chunks": 7})
+    lines: list[str] = []
+    checks = dc.run_checks(log=lines.append)
+    assert [c.ok for c in checks] == [True] * 6, [c.line() for c in checks]
+    assert ingested == [1] and "indexed 2 sources, 7 chunks" in checks[2].detail
+    assert "explains R-FAT-01" in checks[4].detail
+    assert all(line.startswith("✅") for line in lines) and all(re.search(r"\d+(\.\d)? (ms|s)", ln) for ln in lines)
+
+
+def test_demo_check_reports_failures_when_ollama_is_off(client, monkeypatch, mock_ctx, capsys):
+    dc = _demo_check_module()
+
+    def off(*_a, **_k):
+        raise llm.OllamaError("connection refused")
+    monkeypatch.setattr(llm, "tags", off)
+    monkeypatch.setattr(llm, "chat_stream", off)
+    monkeypatch.setattr(llm, "embed", off)
+    monkeypatch.setattr(service, "retrieve", lambda q, k=None: [])
+    monkeypatch.setattr(service, "prime_cache", lambda: False)
+    monkeypatch.setattr(store, "chunk_count", lambda: 0)
+    monkeypatch.setattr(ingest, "ingest", _must_not_call)  # never indexes without Ollama
+    assert dc.main() == 1
+    out = capsys.readouterr().out
+    assert "npm run reseed" in out
+    for name in ("Ollama reachable", "Chat + embed models present", "Reference chunks indexed",
+                 "Prompt cache primed", "Model question"):
+        assert re.search(rf"❌ {re.escape(name)}", out), name
+    assert re.search(r"✅ Alert question", out)  # answered from the alert: no model needed
+    assert "mode 'fallback'" in out

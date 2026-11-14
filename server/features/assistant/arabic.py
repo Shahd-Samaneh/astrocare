@@ -1,4 +1,6 @@
-"""Arabic number + noun agreement for the fixed texts (template, fixed facts).
+"""Number + noun agreement for the fixed texts (template, fixed facts), Arabic and English.
+
+    en_n(1, "night") -> "1 night"      en_n(2, "night") -> "2 nights"
 
     ar_count(1, "ليلة", "ليلتين", "ليالي")   -> "ليلة واحدة"
     ar_count(2, ...)                         -> "ليلتين"
@@ -34,3 +36,13 @@ def ar_count(n: int | float, singular: str, dual: str, plural: str) -> str:
 
 def ar_n(n: int | float, noun: str) -> str:
     return ar_count(n, *NOUNS[noun])
+
+
+# English: noun -> plural (when it is not just noun + "s")
+_EN_PLURAL = {"check-in": "check-ins"}
+
+
+def en_n(n: int | float, noun: str) -> str:
+    """'1 night', '2 nights', '0 nights', '1.5 hours'."""
+    word = noun if n == 1 else _EN_PLURAL.get(noun, noun + "s")
+    return f"{n:g} {word}"
