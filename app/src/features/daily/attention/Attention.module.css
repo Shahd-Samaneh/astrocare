@@ -1,0 +1,216 @@
+/* Owner: Shahd. Attention check styles: tokens only. */
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--text-2);
+}
+
+.facts {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-muted);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.retestBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--text);
+}
+
+/* ---- runner ---------------------------------------------------------------- */
+.runner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.runnerHead {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.progress {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.dots {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  flex: 1;
+}
+
+.dots li {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-chip);
+}
+
+.dots li.dotDone {
+  background: var(--accent);
+}
+
+.dots li.dotNow {
+  background: var(--accent-2);
+  box-shadow: var(--focus-ring);
+}
+
+.target {
+  min-height: 300px;
+  border-radius: var(--radius-xl);
+  border: 2px solid var(--border-strong);
+  background: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.target:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.stimulus {
+  width: 96px;
+  height: 96px;
+  border-radius: var(--radius-pill);
+  border: 3px dashed var(--border-input);
+  background: transparent;
+}
+
+.big {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.small {
+  color: var(--text-muted);
+}
+
+.phase_stimulus {
+  border-color: var(--accent);
+  background: var(--bg-active);
+}
+
+.phase_stimulus .stimulus {
+  border: none;
+  background: var(--accent);
+}
+
+.phase_stimulus .big {
+  color: var(--accent);
+}
+
+.phase_falseStart {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+}
+
+.phase_falseStart .big {
+  color: var(--warn);
+}
+
+.phase_feedback .big {
+  font-family: var(--font-mono);
+}
+
+/* ---- result ------------------------------------------------------------------ */
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.resultHead {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.stat {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+
+.stat dt {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.stat dd {
+  margin: 4px 0 0;
+  color: var(--text-2);
+}
+
+.statValue {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.statSub {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.meta {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.experimental {
+  font-size: 12px;
+  color: var(--warn);
+  border-left: 3px solid var(--warn-border);
+  padding-left: 10px;
+}

@@ -45,3 +45,49 @@ co2_max:
   unit: mmHg
   source: "TODO"
   note: "must come from a NASA source before the demo"
+
+# ---- Daily pair (Shahd + Nadia) ---------------------------------------------
+# Read by server/features/daily/attention_stats.py::daily_threshold(). The group
+# itself has value/source/note so the flat core loader (and its "every threshold
+# has a source" test) treats it as one entry. Haya: see docs/proposals/daily-contracts.md §6.
+daily:
+  value: null
+  unit: ""
+  source: "Group of Daily thresholds (each key below has its own source)"
+  note: "Nested keys are read by the Daily feature, not by core/config.thresholds()."
+
+  sleep_short_hours:
+    value: 6
+    unit: h
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value"
+
+  sleep_short_nights:
+    value: 2
+    unit: nights
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. Counted over the last 3 nights."
+
+  attention_slower_pct:
+    value: 15
+    unit: "%"
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. Routine-test median in the last 48 h vs personal baseline."
+
+  attention_baseline_n:
+    value: 7
+    unit: tests
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. Routine tests before the last 48 h used for the baseline."
+
+  pvt_lapse_ms:
+    value: 500
+    unit: ms
+    source: "Psychomotor Vigilance Test convention"
+    note: "standard PVT lapse definition (reaction time ≥ 500 ms)"
+
+  exercise_missed_days:
+    value: 2
+    unit: days
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. Used by Nadia's R-EX-01."

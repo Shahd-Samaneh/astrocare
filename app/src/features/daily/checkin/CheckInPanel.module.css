@@ -1,0 +1,127 @@
+/* Owner: Shahd. Check-in panel: tokens only. */
+.card {
+  scroll-margin-top: 24px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.scale,
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scaleLabel {
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.options {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 560px) {
+  .options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.option {
+  min-height: 64px;
+  min-width: var(--tap-min);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-input);
+  background: var(--bg-panel);
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.option:hover {
+  background: var(--bg-active);
+}
+
+.option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.selected {
+  border-color: var(--accent);
+  background: var(--bg-active);
+  color: var(--text-on-active);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.optionNum {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.optionText {
+  font-size: 12px;
+  text-align: center;
+}
+
+.textarea {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-input);
+  background: var(--bg-panel);
+  resize: vertical;
+}
+
+.textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.done {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.doneTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--ok);
+}
+
+.meta {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.error {
+  color: var(--danger-2);
+  font-size: 13px;
+}
