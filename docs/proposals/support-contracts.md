@@ -150,3 +150,26 @@ Python: `from server.features.reports.service import add_report_item`
 ### N3. `shared/api/client.ts`: `del` (same as Marah's A4)
 
 Needed for `DELETE /api/reports/items/{id}`. Until then my `reports/api.ts` uses `fetch('/api/...')` directly.
+
+
+### N4. `CommsStatus` (contracts §3)
+
+```ts
+interface CommsStatus {
+  connected: boolean;          // scheduled window open now, or a simulated one
+  simulatedWindow: boolean;
+  nextWindowTs: string;        // from core/status.next_comm_window() (config/app.yaml), not duplicated
+  windowDurationMin: number;
+  queuedCount: number;
+  signalDelaySec: number;
+  lastWindowTs?: string | null;
+}
+```
+
+**Live now:**
+```
+GET  /api/comms                   -> CommsStatus   (replaces the old shape with `outbox[]`)
+POST /api/comms/simulate-window   -> { windowId, openedTs, sentReportIds[] }   // demo only: queued -> sent
+```
+Python: `from server.features.reports.service import get_comms_status` (same shape, snake_case). Haya can call it from `core/status` if useful.
+Table: `comms_windows` (created in my `service.py`).
