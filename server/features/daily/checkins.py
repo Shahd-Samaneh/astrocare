@@ -37,8 +37,10 @@ class CheckInIn(ApiModel):
 
 
 def _public(c: CheckIn, include_private: bool = False) -> dict:
-    """JSON (camelCase). Without include_private the key `notePrivate` is absent, not null."""
-    return c.model_dump(by_alias=True, exclude=None if include_private else {"note_private"})
+    """JSON (camelCase). Without include_private the key `notePrivate` is absent, not null.
+    Only a real `True` opts in: when list_checkins() is called from Python without the
+    argument, FastAPI's Query(...) default object (truthy) must never reveal the note."""
+    return c.model_dump(by_alias=True, exclude=None if include_private is True else {"note_private"})
 
 
 def _load(n: int | None = None) -> list[CheckIn]:

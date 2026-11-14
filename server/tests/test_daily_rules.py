@@ -161,3 +161,17 @@ def test_summary_filter_includes_circ():
     from server.features.daily.summary import DAILY_RULE_PREFIXES
 
     assert set(DAILY_RULE_PREFIXES) == {"R-SLP", "R-FAT", "R-CIRC", "R-EX"}
+
+
+# ---- service functions used by other features (assistant) ---------------------------------
+def test_router_service_functions_never_include_private_notes(c):
+    from server.features.daily import router as daily
+
+    c.post("/api/checkins", json={"mood": 3, "stress": 2, "notePrivate": "secret-note-xyz"})
+    rows = daily.list_checkins(n=14)
+    assert rows and all("notePrivate" not in r for r in rows)
+    assert "secret-note-xyz" not in json.dumps(rows)
+    # the other names the assistant imports from this module return real data
+    assert len(daily.list_sleep(nights=7)) == 7
+    assert daily.list_tests(n=14) and isinstance(daily.exercise_plan(), list) and daily.exercise_plan()
+    assert "fatigueFlag" in daily.today_plan()
