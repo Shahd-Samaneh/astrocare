@@ -61,12 +61,40 @@ def sleep_context_at(ts: str) -> SleepContext:
                         hours_awake=round(awake, 1), source=r["source"])
 
 
+class RetestComparison(ApiModel):
+    """Before vs after for a retest: the routine median that triggered the alert vs this retest."""
+    alert_id: str
+    rule_id: str
+    alert_status: str  # after the engine ran (a retest sets 'recheck')
+    before_median_ms: Optional[float] = None  # routine tests of the same mode, 48 h before the alert
+    before_test_ids: list[str] = []
+    after_median_ms: float
+    diff_ms: Optional[float] = None  # after − before (negative = faster)
+    diff_pct: Optional[float] = None
+
+
+def retest_comparison(alert_id: str, test: DailyCognitiveTest) -> RetestComparison | None:
+    alert = db.get("alerts", alert_id)
+    if not alert:
+        return None
+    tests = [t for t in load_tests() if t.id != test.id]
+    before = recent_routine(tests, parse_ts(alert["ts"]), mode=test.mode)
+    before_med = float(statistics.median(t.median_ms for t in before)) if before else None
+    diff = round(test.median_ms - before_med, 1) if before_med else None
+    return RetestComparison(
+        alert_id=alert_id, rule_id=alert["rule_id"], alert_status=alert["status"],
+        before_median_ms=before_med, before_test_ids=[t.id for t in before], after_median_ms=test.median_ms,
+        diff_ms=diff, diff_pct=round(diff / before_med * 100, 1) if before_med else None,
+    )
+
+
 class TestResult(ApiModel):
     test: DailyCognitiveTest
     pct_vs_baseline: Optional[float] = None
     within_range: Optional[bool] = None
     baseline: AttentionBaseline
     sleep_context: SleepContext = SleepContext()
+    retest: Optional[RetestComparison] = None  # only for context 'retest' with relatedAlertId
 
 
 @router.get("/tests")
@@ -108,9 +136,11 @@ def add_test(body: TestIn) -> TestResult:
     db.log_action("crew", "attention_test" if test.context == "routine" else "attention_retest", test.id)
     run_daily_engine()
     # While the same-mode baseline is still building (< 3 tests), no within/outside verdict.
+    comparison = (retest_comparison(test.related_alert_id, test)
+                  if test.context == "retest" and test.related_alert_id else None)
     return TestResult(test=test, pct_vs_baseline=pct_vs(median, base),
                       within_range=None if base.building else within(median, base),
-                      baseline=base, sleep_context=sleep_context_at(ts))
+                      baseline=base, sleep_context=sleep_context_at(ts), retest=comparison)
 
 
 def attention_summary(n: int = 10) -> dict:

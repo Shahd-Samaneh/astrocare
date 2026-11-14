@@ -46,12 +46,25 @@ export interface SleepContext {
   source: Source | null;
 }
 
+export interface RetestComparison {
+  alertId: string;
+  ruleId: string;
+  alertStatus: string;
+  beforeMedianMs: number | null;
+  beforeTestIds: string[];
+  afterMedianMs: number;
+  diffMs: number | null;
+  diffPct: number | null;
+}
+
 export interface TestResult {
   test: DailyCognitiveTest;
   pctVsBaseline: number | null;
   withinRange: boolean | null;
   baseline: AttentionBaseline;
   sleepContext: SleepContext;
+  /** Only for retests linked to an alert. */
+  retest?: RetestComparison | null;
 }
 
 export interface NewTest {

@@ -21,6 +21,7 @@ import {
 } from '../api.attention';
 import { HistoryChart } from '../attention/HistoryChart';
 import { EXPERIMENTAL_NOTE, ResultPanel } from '../attention/ResultPanel';
+import { RetestCompare } from '../attention/RetestCompare';
 import { SleepRtChart } from '../attention/SleepRtChart';
 import { SleepinessQuestion } from '../attention/SleepinessQuestion';
 import { TestRunner } from '../attention/TestRunner';
@@ -156,9 +157,10 @@ export default function AttentionCheck() {
             />
           ) : result ? (
             <>
+              {result.retest && <RetestCompare cmp={result.retest} />}
               <ResultPanel result={result} lapseMs={thresholds.data?.pvt_lapse_ms?.value ?? null} />
               <div className={styles.row}>
-                {retestId && (
+                {retestId && !result.retest && (
                   <Button
                     to={`/alerts/${encodeURIComponent(retestId)}`}
                     icon={<ArrowLeft size={16} />}

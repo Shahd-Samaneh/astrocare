@@ -117,3 +117,21 @@ def test_sources_endpoint_lists_the_seven_ids(c):
 def test_unmodified_seed_has_no_checkin_today():
     with daily_client(remove_today_checkin=False) as c:
         assert "Today's check-in" in open_alert(c, FAT)["missing"]
+
+
+def test_retest_returns_before_vs_after(c):
+    a = open_alert(c, FAT)
+    r = c.post("/api/tests", json={"trialsMs": [280, 290, 285, 300, 275], "context": "retest",
+                                   "relatedAlertId": a["id"]}).json()
+    cmp = r["retest"]
+    assert cmp["alertId"] == a["id"] and cmp["ruleId"] == FAT
+    assert cmp["alertStatus"] == "recheck"
+    assert set(cmp["beforeTestIds"]) == {"pvt-141", "pvt-142"}
+    assert cmp["beforeMedianMs"] == pytest.approx(342, abs=15)
+    assert cmp["afterMedianMs"] == 285
+    assert cmp["diffMs"] == pytest.approx(285 - cmp["beforeMedianMs"])
+    assert cmp["diffPct"] < 0  # faster after rest
+
+
+def test_routine_test_has_no_retest_comparison(c):
+    assert c.post("/api/tests", json={"trialsMs": [300, 310, 290]}).json()["retest"] is None
