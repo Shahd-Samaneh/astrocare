@@ -24,7 +24,10 @@ import { TRIALS, isRunning, useReactionTest } from '../attention/useReactionTest
 import styles from '../attention/Attention.module.css';
 import { NasaBasis } from '../common/NasaBasis';
 
-type Saving = { state: 'idle' } | { state: 'saving' } | { state: 'error'; message: string; trials: number[]; falseStarts: number };
+type Saving =
+  | { state: 'idle' }
+  | { state: 'saving' }
+  | { state: 'error'; message: string; trials: number[]; falseStarts: number };
 
 const WHY =
   'Tiredness can slow reactions before you notice it yourself. A one-minute test, compared with your own usual range, ' +
@@ -76,7 +79,11 @@ export default function AttentionCheck() {
     test.start();
   };
 
-  const dateText = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  const dateText = new Date().toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
   const eyebrow = `Daily · ${status ? `Mission day ${status.missionDay} · ` : ''}${dateText}`;
   const ruleLabel = alert.data?.ruleId ?? 'R-FAT-01';
   const lastNight = summary.data?.sleep?.lastNight?.hours;
@@ -90,80 +97,93 @@ export default function AttentionCheck() {
           <RotateCcw size={18} aria-hidden />
           <span>
             <strong>Retest for alert {ruleLabel}</strong>
-            {alert.data ? ` · ${alert.data.title}` : ''}. The result is linked to the alert and moves it to “recheck”.
+            {alert.data ? ` · ${alert.data.title}` : ''}. The result is linked to the alert and
+            moves it to “recheck”.
           </span>
-          {alert.error && <span className={styles.meta}>(alert not found: the result is still saved as a retest)</span>}
+          {alert.error && (
+            <span className={styles.meta}>
+              (alert not found: the result is still saved as a retest)
+            </span>
+          )}
         </div>
       )}
 
-      <div className={styles.layout}>
-        <div className={styles.column}>
-          <Card
-            title={running ? 'Test in progress' : result ? 'Your result' : 'Reaction-time test'}
-            subtitle={running ? 'Esc cancels' : `${TRIALS} trials, about 1 minute`}
-          >
-            {running ? (
-              <TestRunner state={test.state} onRespond={respond} onCancel={cancel} />
-            ) : saving.state === 'saving' ? (
-              <LoadingState label="Saving your result…" />
-            ) : saving.state === 'error' ? (
-              <ErrorState
-                message={`Your result was not saved: ${saving.message}`}
-                onRetry={() => save(saving.trials, saving.falseStarts)}
-              />
-            ) : result ? (
-              <>
-                <ResultPanel result={result} lastNightHours={lastNight} />
-                <div className={styles.row}>
-                  {retestId && (
-                    <Button to={`/alerts/${encodeURIComponent(retestId)}`} icon={<ArrowLeft size={16} />}>
-                      Back to the alert
-                    </Button>
-                  )}
-                  <Button variant="secondary" onClick={start} icon={<Play size={16} />}>
-                    Test again
+      <div className={styles.column}>
+        <Card
+          title={running ? 'Test in progress' : result ? 'Your result' : 'Reaction-time test'}
+          subtitle={running ? 'Esc cancels' : `${TRIALS} trials, about 1 minute`}
+        >
+          {running ? (
+            <TestRunner state={test.state} onRespond={respond} onCancel={cancel} />
+          ) : saving.state === 'saving' ? (
+            <LoadingState label="Saving your result…" />
+          ) : saving.state === 'error' ? (
+            <ErrorState
+              message={`Your result was not saved: ${saving.message}`}
+              onRetry={() => save(saving.trials, saving.falseStarts)}
+            />
+          ) : result ? (
+            <>
+              <ResultPanel result={result} lastNightHours={lastNight} />
+              <div className={styles.row}>
+                {retestId && (
+                  <Button
+                    to={`/alerts/${encodeURIComponent(retestId)}`}
+                    icon={<ArrowLeft size={16} />}
+                  >
+                    Back to the alert
                   </Button>
-                </div>
-              </>
-            ) : (
-              <div className={styles.intro}>
-                <p>
-                  A light will appear after a random wait. Respond as fast as you can by clicking, tapping or pressing{' '}
-                  <kbd>Space</kbd>.
-                </p>
-                <ul className={styles.facts}>
-                  <li>{TRIALS} trials, each after a wait of 2–8 seconds: about 1 minute in total.</li>
-                  <li>Responding before the light is a false start, and that trial repeats.</li>
-                  <li>Your median time is compared with your own usual range, not with other people.</li>
-                </ul>
-                <div className={styles.row}>
-                  <Button onClick={start} icon={<Timer size={16} />} autoFocus>
-                    {retestId ? 'Start retest' : 'Start'}
-                  </Button>
-                </div>
-                <p className={styles.experimental} role="note">
-                  {EXPERIMENTAL_NOTE}
-                </p>
+                )}
+                <Button variant="secondary" onClick={start} icon={<Play size={16} />}>
+                  Test again
+                </Button>
               </div>
+            </>
+          ) : (
+            <div className={styles.intro}>
+              <p>
+                A light will appear after a random wait. Respond as fast as you can by clicking,
+                tapping or pressing <kbd>Space</kbd>.
+              </p>
+              <ul className={styles.facts}>
+                <li>{TRIALS} trials, each after a wait of 2–8 seconds: about 1 minute in total.</li>
+                <li>Responding before the light is a false start, and that trial repeats.</li>
+                <li>
+                  Your median time is compared with your own usual range, not with other people.
+                </li>
+              </ul>
+              <div className={styles.row}>
+                <Button onClick={start} icon={<Timer size={16} />} autoFocus>
+                  {retestId ? 'Start retest' : 'Start'}
+                </Button>
+              </div>
+              <p className={styles.experimental} role="note">
+                {EXPERIMENTAL_NOTE}
+              </p>
+            </div>
+          )}
+        </Card>
+
+        {!running && (
+          <Card
+            title="Last 10 tests"
+            subtitle="Median reaction time over your usual range (shaded)"
+          >
+            {history.loading && !history.data ? (
+              <LoadingState />
+            ) : history.error ? (
+              <ErrorState message={history.error.message} onRetry={history.reload} />
+            ) : (
+              <HistoryChart tests={history.data ?? []} baseline={baseline.data} />
             )}
           </Card>
+        )}
 
-          {!running && (
-            <Card title="Last 10 tests" subtitle="Median reaction time over your usual range (shaded)">
-              {history.loading && !history.data ? (
-                <LoadingState />
-              ) : history.error ? (
-                <ErrorState message={history.error.message} onRetry={history.reload} />
-              ) : (
-                <HistoryChart tests={history.data ?? []} baseline={baseline.data} />
-              )}
-            </Card>
-          )}
-        </div>
-
-        <div className={styles.column}>
-          <NasaBasis ids={['nasa-pvt-iss', 'nasa-hrp-bmed-risk', 'nasa-hrp-sleep-risk']} why={WHY} />
-        </div>
+        <NasaBasis
+          variant="test"
+          ids={['nasa-pvt-iss', 'nasa-hrp-bmed-risk', 'nasa-hrp-sleep-risk']}
+          why={WHY}
+        />
       </div>
     </>
   );
