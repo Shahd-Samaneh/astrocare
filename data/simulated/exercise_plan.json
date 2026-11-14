@@ -1,31 +1,25 @@
 {
-  "_comment": "SIMULATED weekly exercise plan (mission days 140-146). Alternatives with equipmentId need that equipment; the others need none.",
+  "_comment": "SIMULATED example week (mission days 140-146), ISS-style. Not a prescription: durations and intensities are an EXAMPLE plan. Devices: ARED = Advanced Resistive Exercise Device (eq-ared), T2 = treadmill with harness (eq-treadmill), CEVIS = cycle ergometer (eq-cycle). Items with day=null are alternatives only; they are referenced by id from another item's alternatives[]. equipmentId must match data/simulated/resources.json.",
   "plans": [
-    { "id": "ex-140", "day": 140, "type": "Resistive training", "durationMin": 60, "equipmentId": "eq-ared",
-      "alternatives": [
-        { "id": "alt-140-a", "type": "Resistance band circuit", "durationMin": 40, "equipmentId": "eq-bands" },
-        { "id": "alt-140-b", "type": "Bodyweight circuit", "durationMin": 30, "note": "No equipment" } ] },
-    { "id": "ex-141", "day": 141, "type": "Cycle intervals", "durationMin": 45, "equipmentId": "eq-cycle",
-      "alternatives": [
-        { "id": "alt-141-a", "type": "Treadmill steady run", "durationMin": 30, "equipmentId": "eq-treadmill" },
-        { "id": "alt-141-b", "type": "Bodyweight HIIT", "durationMin": 25, "note": "No equipment" } ] },
-    { "id": "ex-142", "day": 142, "type": "Resistive training", "durationMin": 60, "equipmentId": "eq-ared",
-      "alternatives": [
-        { "id": "alt-142-a", "type": "Resistance band circuit", "durationMin": 40, "equipmentId": "eq-bands" },
-        { "id": "alt-142-b", "type": "Isometric holds + stretching", "durationMin": 25, "note": "No equipment, low intensity" } ] },
-    { "id": "ex-143", "day": 143, "type": "Treadmill run", "durationMin": 45, "equipmentId": "eq-treadmill",
-      "alternatives": [
-        { "id": "alt-143-a", "type": "Cycle steady state", "durationMin": 45, "equipmentId": "eq-cycle" },
-        { "id": "alt-143-b", "type": "Bodyweight circuit", "durationMin": 30, "note": "No equipment" } ] },
-    { "id": "ex-144", "day": 144, "type": "Resistive training", "durationMin": 60, "equipmentId": "eq-ared",
-      "alternatives": [
-        { "id": "alt-144-a", "type": "Resistance band circuit", "durationMin": 40, "equipmentId": "eq-bands" },
-        { "id": "alt-144-b", "type": "Bodyweight circuit", "durationMin": 30, "note": "No equipment" } ] },
-    { "id": "ex-145", "day": 145, "type": "Cycle intervals", "durationMin": 45, "equipmentId": "eq-cycle",
-      "alternatives": [
-        { "id": "alt-145-a", "type": "Treadmill intervals", "durationMin": 30, "equipmentId": "eq-treadmill" },
-        { "id": "alt-145-b", "type": "Bodyweight HIIT", "durationMin": 25, "note": "No equipment" } ] },
-    { "id": "ex-146", "day": 146, "type": "Mobility and stretching", "durationMin": 20,
-      "alternatives": [] }
+    { "id": "ex-140", "day": 140, "type": "ARED resistance session (full body)", "durationMin": 60, "intensity": "hard", "equipmentId": "eq-ared",
+      "alternatives": ["alt-bands-circuit", "alt-cevis-easy", "alt-mobility"] },
+    { "id": "ex-141", "day": 141, "type": "CEVIS interval ride", "durationMin": 45, "intensity": "hard", "equipmentId": "eq-cycle",
+      "alternatives": ["alt-t2-easy", "alt-141-b"] },
+    { "id": "ex-142", "day": 142, "type": "ARED resistance session (full body)", "durationMin": 60, "intensity": "hard", "equipmentId": "eq-ared",
+      "alternatives": ["alt-bands-circuit", "alt-cevis-easy", "alt-mobility"] },
+    { "id": "ex-143", "day": 143, "type": "T2 treadmill intervals (with harness)", "durationMin": 40, "intensity": "hard", "equipmentId": "eq-treadmill",
+      "alternatives": ["alt-cevis-easy", "alt-bands-circuit", "alt-mobility"] },
+    { "id": "ex-144", "day": 144, "type": "ARED resistance session (lower body focus)", "durationMin": 60, "intensity": "hard", "equipmentId": "eq-ared",
+      "alternatives": ["alt-bands-circuit", "alt-t2-easy", "alt-mobility"] },
+    { "id": "ex-145", "day": 145, "type": "CEVIS steady ride", "durationMin": 45, "intensity": "moderate", "equipmentId": "eq-cycle",
+      "alternatives": ["alt-t2-easy", "alt-mobility"] },
+    { "id": "ex-146", "day": 146, "type": "Mobility and stretching", "durationMin": 20, "intensity": "light",
+      "alternatives": [] },
+
+    { "id": "alt-bands-circuit", "day": null, "type": "Resistance bands circuit", "durationMin": 40, "intensity": "moderate", "equipmentId": "eq-bands", "alternatives": [] },
+    { "id": "alt-cevis-easy", "day": null, "type": "CEVIS easy spin", "durationMin": 30, "intensity": "light", "equipmentId": "eq-cycle", "alternatives": [] },
+    { "id": "alt-t2-easy", "day": null, "type": "T2 easy walk or jog (with harness)", "durationMin": 30, "intensity": "moderate", "equipmentId": "eq-treadmill", "alternatives": [] },
+    { "id": "alt-mobility", "day": null, "type": "Mobility and stretching", "durationMin": 20, "intensity": "light", "alternatives": [] },
+    { "id": "alt-141-b", "day": null, "type": "Mobility and stretching (short)", "durationMin": 15, "intensity": "light", "alternatives": [] }
   ]
 }
