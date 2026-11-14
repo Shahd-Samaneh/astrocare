@@ -1,0 +1,11 @@
+title: Exploration Medical Integrated Product Team Clinical Decision Support Market Survey
+url: https://ntrs.nasa.gov/citations/20250000388
+id: ntrs-cds-market-survey
+
+Authors: Angela Harrivel, Carly O’Rourke, Courtney Schkurko, Justin Yang, Rahul Suresh, Moriah Thompson
+
+Document type: Presentation
+
+Keywords: Decision support, AI/ML, Spaceflight medicine, Earth independent operations
+
+NASA’s Exploration Medical Integrated Product Team (XMIPT) has identified Clinical Decision Support (CDS) technology as a critical need for future human space exploration.  Such technology will support real time diagnosis, monitoring, and treatment of spaceflight medical conditions.  The need for such tools and support systems is critical for in-mission clinical decision-making, especially when Earth-based support is unavailable due to communication delays or blackouts. Supporting technologies may or may not involve Artificial Intelligence (AI), and would support astronaut crew with minimal clinical training, or even those with advanced training if they are, for example, in need of a refresher, experiencing multiple stressors, or temporarily overloaded with tasking. This need traces to the Development of Earth Independent Operations Technologies for NASA’s Mars Campaign Office.  The CDS Market Survey purpose, methods, outcomes thus far, and near-term steps will be discussed.

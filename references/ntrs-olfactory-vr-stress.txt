@@ -1,0 +1,13 @@
+title: The Scent of Serenity: Lessons Learned From Olfactory-Enhanced Virtual Reality for Stress Reduction in Isolated and Confined Environments
+url: https://ntrs.nasa.gov/citations/20260005215
+id: ntrs-olfactory-vr-stress
+
+Authors: Renee Abbott, Dale W Russell, Suzanne Bell, Ana Diaz-Artiles
+
+Published: 2026-07-08
+
+Document type: Accepted Manuscript
+
+Keywords: Presence, Cognition, Restorative Environments, Virtual Nature, Behavioral Health Intervention, Multisensory Integration, Immersive Environments
+
+Chronic stress and the lack of restorative environments negatively impact behavioral health, especially in isolated, confined, or operational settings. Virtual reality (VR) is a promising behavioral health tool, with virtual nature scenes shown to promote relaxation and improve mood. Enhancing VR with olfactory stimuli to create a multisensory virtual nature experience may amplify these restorative effects. This exploratory study examined the feasibility of utilizing an olfactory-enhanced VR (OVR) intervention, comparing psychological and cognitive performance outcomes over two weeks aboard a US Navy ship for three groups: OVR, standard VR, and a no-intervention control. Twenty-nine participants were assigned to the Control, VR only, or OVR group. Participants completed cognitive performance tasks and surveys measuring affect, perceived stress, presence, and restoration. The OVR group showed significant reductions in negative affect immediately post-intervention (p = 0.02, d = −1.3) compared to baseline. Both VR and OVR groups rated Total presence low (below the 50th percentile), but General Presence, Spatial Presence, and restorative qualities of the virtual environments were rated highly. Cognitive performance remained generally stable but revealed potential decrements in sustained vigilance and emotion identification as well as a decline in risk-taking propensity, though effects were small and inconsistent across cognitive tasks. Qualitative feedback provided preliminary evidence of acceptability and perceived benefits. However, results should be interpreted cautiously, as the study was exploratory and not powered for robust inference across the large number of assessed outcomes. Overall, olfactory-enhanced VR was associated with immediate improvements in negative affect but lacked evidence of extended psychological or cognitive performance benefits under the conditions tested. These findings provide preliminary feasibility evidence supporting further investigations examining multisensory VR as an acute affective-support tool in operational environments. Further research should explore benefit duration, exposure dosage, and individual differences to optimize the effectiveness of VR nature interventions.

@@ -1,0 +1,41 @@
+title: Risk of Performance Decrements and Adverse Health Outcomes Resulting from Sleep Loss, Circadian Desynchronization, and Work Overload
+url: https://www.nasa.gov/directorates/esdmd/hhp/risk-of-performance-decrements-and-adverse-health-outcomes-resulting-from-sleep-loss-circadian-desynchronization-and-work-overload/
+id: nasa-hrp-sleep-risk
+
+Risk of Performance Decrements and Adverse Health Outcomes Resulting from Sleep Loss, Circadian Desynchronization, and Work Overload
+
+Directed Acyclic Graph Files
+
+View of Japan Aerospace Exploration Agency (JAXA) Koichi Wakata, Expedition 38 Flight Engineer, strapped into his sleeping bag in his sleep station located in the Node 2. NASA
+
+Astronauts must maintain a high level of cognitive performance during every phase of the mission. Top-tier performance depends on acquiring an adequate quantity of daily sleep and the appropriate sleep quality.
+
+Previous spaceflight experience has shown that astronauts commonly experience sleep deprivation. Additionally, due to the nature of spaceflight, circadian disturbances are present. Together, these two aspects lead to fatigue and errors while performing tasks. Evidence from short and long-duration missions and other relevant environments suggests that environmental factors (e.g., noise, temperature, vibration, and light) inhibit sleep and impact well-being in space. Thus, for crewmembers to achieve optimal sleep, they must be provided with a sleep environment that allows them to achieve quality sleep, free of external disruptions.
+
+NASA astronaut and Expedition 67 Flight Engineer Kjell Lindgren poses for a portrait inside a crew sleeping bag aboard the International Space Station. NASA
+
+Directed Acyclic Graph Files
+
++ DAG File Information (HSRB Home Page)
+
++ Sleep Risk DAG and Narrative (PDF)
+
++ Sleep Risk DAG Code (TXT)
+
++ Risk of Performance Decrements and Adverse Health Outcomes Resulting from Sleep Loss, Circadian Desynchronization, and Work Overload
+
++ 2016 April Evidence Report (MSWord)
+
+Last Updated Sep 16, 2025 EditorRobert E. LewisLocationJohnson Space Center
+
+Human Health and Performance
+
+Risk of Reduced Crew Health and Performance Due to Hypoxia
+
+Article 2 years ago 1 min read
+
+Risk of Radiation Carcinogenesis
+
+Article 2 years ago 1 min read
+
+Risk of Reduced Physical Performance Capabilities Due to Reduced Aerobic Capacity (Aerobic Risk)
