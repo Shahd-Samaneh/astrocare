@@ -25,7 +25,7 @@ export function HistoryChart({ tests, baseline }: HistoryChartProps) {
   const rows = [...tests].reverse().map((x) => ({
     when: label(x.ts),
     medianMs: Math.round(x.medianMs),
-    kind: x.context === 'retest' ? 'Retest' : 'Routine',
+    kind: `${x.context === 'retest' ? 'Retest' : 'Routine'}${x.mode === 'extended' ? ', extended' : ''}${x.inputMethod ? `, ${x.inputMethod}` : ''}`,
   }));
   const band =
     baseline && baseline.rangeLowMs != null && baseline.rangeHighMs != null

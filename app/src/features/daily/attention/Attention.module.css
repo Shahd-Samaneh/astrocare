@@ -509,3 +509,12 @@
   letter-spacing: 0.04em;
   color: var(--text-muted);
 }
+
+.notice {
+  font-size: 13px;
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+}

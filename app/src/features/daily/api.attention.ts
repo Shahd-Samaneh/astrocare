@@ -65,6 +65,8 @@ export interface TestResult {
   sleepContext: SleepContext;
   /** Only for retests linked to an alert. */
   retest?: RetestComparison | null;
+  /** This test's input differs from the usual input of the baseline tests. */
+  inputDiffers?: boolean;
 }
 
 export interface NewTest {
@@ -75,6 +77,7 @@ export interface NewTest {
   sleepinessKss?: number | null;
   mode?: TestMode;
   trialOffsetsMs?: number[];
+  inputMethod?: InputMethod;
 }
 
 export interface PvtMeasures {

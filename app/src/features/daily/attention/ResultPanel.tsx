@@ -105,6 +105,12 @@ export function ResultPanel({
           </div>
         </dl>
       )}
+      {result.inputDiffers && (
+        <p className={styles.notice} role="note">
+          Different input method from your usual tests ({test.inputMethod} vs{' '}
+          {baseline.usualInputMethod}). Comparison may be less reliable.
+        </p>
+      )}
       {building && (
         <p className={styles.meta}>
           Building your baseline ({baseline.n}/{baseline.needed ?? 3}):{' '}

@@ -216,3 +216,33 @@ def test_building_baseline_gives_no_verdict(c):
     assert r["baseline"]["n"] == 1 and r["baseline"]["building"] is True
     assert r["pctVsBaseline"] is not None  # shown as preliminary
     assert r["withinRange"] is None
+
+
+
+# ---- input method ------------------------------------------------------------------------
+@pytest.mark.parametrize("method", ["mouse", "touch", "keyboard"])
+def test_input_method_is_stored(c, method):
+    t = c.post("/api/tests", json={"trialsMs": [300, 310, 290], "inputMethod": method}).json()["test"]
+    assert t["inputMethod"] == method
+    assert c.get("/api/tests?n=1").json()[0]["inputMethod"] == method
+
+
+def test_unknown_input_method_is_rejected(c):
+    assert c.post("/api/tests", json={"trialsMs": [300], "inputMethod": "pen"}).status_code == 422
+
+
+def test_input_differs_from_usual_baseline_input(c):
+    for days_ago in (3, 4, 5):
+        ts = iso(utcnow() - timedelta(days=days_ago))
+        c.post("/api/tests", json={"trialsMs": [400, 410, 420], "mode": "extended", "inputMethod": "mouse", "ts": ts})
+    same = c.post("/api/tests", json={"trialsMs": [400], "mode": "extended", "inputMethod": "mouse"}).json()
+    other = c.post("/api/tests", json={"trialsMs": [400], "mode": "extended", "inputMethod": "touch"}).json()
+    assert same["baseline"]["usualInputMethod"] == "mouse"
+    assert same["inputDiffers"] is False
+    assert other["inputDiffers"] is True
+
+
+def test_no_input_note_when_baseline_input_unknown(c):
+    # seeded (simulated) tests have no input method recorded
+    r = c.post("/api/tests", json={"trialsMs": [300, 310, 290], "inputMethod": "touch"}).json()
+    assert r["baseline"]["usualInputMethod"] is None and r["inputDiffers"] is False

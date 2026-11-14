@@ -21,7 +21,7 @@ from server.core.models import ApiModel
 from server.core.status import mission_clock
 
 from .attention_stats import (
-    AttentionBaseline, DailyCognitiveTest, TestContext, TestMode, baseline_from, load_tests, pct_vs, pvt_measures,
+    AttentionBaseline, DailyCognitiveTest, InputMethod, TestContext, TestMode, baseline_from, load_tests, pct_vs, pvt_measures,
     recent_routine, score_trials, set_test_context, set_test_meta, within,
 )
 from .engine_hooks import run_daily_engine
@@ -40,6 +40,7 @@ class TestIn(ApiModel):
     mode: TestMode = "quick"  # 'extended' = 3 minutes, experimental, not validated
     sleepiness_kss: Optional[int] = Field(default=None, ge=1, le=9)  # KSS 1–9, optional
     trial_offsets_ms: Optional[list[float]] = Field(default=None, max_length=MAX_TRIALS)
+    input_method: Optional[InputMethod] = None  # from the first response
     ts: Optional[str] = None  # tests and backfill only; the UI never sends it
 
 
@@ -95,6 +96,8 @@ class TestResult(ApiModel):
     baseline: AttentionBaseline
     sleep_context: SleepContext = SleepContext()
     retest: Optional[RetestComparison] = None  # only for context 'retest' with relatedAlertId
+    # True when this test's input differs from the most common input among the baseline tests
+    input_differs: bool = False
 
 
 @router.get("/tests")
@@ -124,7 +127,7 @@ def add_test(body: TestIn) -> TestResult:
         false_starts=body.false_starts, context=body.context,
         related_alert_id=body.related_alert_id if body.context == "retest" else None,
         mission_day=mission_clock(parse_ts(ts))[1], sleepiness_kss=body.sleepiness_kss,
-        mode=body.mode, trial_offsets_ms=body.trial_offsets_ms if valid == [float(x) for x in body.trials_ms] else None,
+        mode=body.mode, input_method=body.input_method, trial_offsets_ms=body.trial_offsets_ms if valid == [float(x) for x in body.trials_ms] else None,
     )
     test.measures = pvt_measures(test.trials_ms, test.false_starts)
     # Baseline before inserting: the new test never counts towards its own baseline.
@@ -132,7 +135,7 @@ def add_test(body: TestIn) -> TestResult:
     db.insert("cognitive_tests", test.model_dump())  # extra fields are ignored by db.insert
     set_test_context(test.id, test.context, test.related_alert_id)
     set_test_meta(test.id, mode=test.mode, sleepiness_kss=test.sleepiness_kss,
-                  trial_offsets_ms=test.trial_offsets_ms)
+                  input_method=test.input_method, trial_offsets_ms=test.trial_offsets_ms)
     db.log_action("crew", "attention_test" if test.context == "routine" else "attention_retest", test.id)
     run_daily_engine()
     # While the same-mode baseline is still building (< 3 tests), no within/outside verdict.
@@ -140,7 +143,9 @@ def add_test(body: TestIn) -> TestResult:
                   if test.context == "retest" and test.related_alert_id else None)
     return TestResult(test=test, pct_vs_baseline=pct_vs(median, base),
                       within_range=None if base.building else within(median, base),
-                      baseline=base, sleep_context=sleep_context_at(ts), retest=comparison)
+                      baseline=base, sleep_context=sleep_context_at(ts), retest=comparison,
+                      input_differs=bool(test.input_method and base.usual_input_method
+                                         and test.input_method != base.usual_input_method))
 
 
 def attention_summary(n: int = 10) -> dict:

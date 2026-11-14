@@ -16,6 +16,7 @@ import {
   type DailyCognitiveTest,
   type DailySummary,
   type DailyThresholds,
+  type InputMethod,
   type TestMode,
   type TestResult,
 } from '../api.attention';
@@ -74,6 +75,7 @@ export default function AttentionCheck() {
           falseStarts: raw.falseStarts,
           mode: raw.mode,
           trialOffsetsMs: raw.offsetsMs,
+          inputMethod: raw.inputMethod,
           sleepinessKss: kss ?? null,
           ...(retestId ? { context: 'retest' as const, relatedAlertId: retestId } : {}),
         });
@@ -94,7 +96,7 @@ export default function AttentionCheck() {
   const test = useReactionTest(save);
   const phase = test.state.phase;
   const running = isRunning(phase);
-  const respond = useCallback(() => test.respond(), [test]);
+  const respond = useCallback((m: InputMethod) => test.respond(m), [test]);
   const cancel = useCallback(() => test.cancel(), [test]);
   const backToIntro = () => {
     setResult(undefined);

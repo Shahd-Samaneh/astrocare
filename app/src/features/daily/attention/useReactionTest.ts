@@ -9,7 +9,7 @@
 // that paints the stimulus, so render time isn't counted against the user. Each response
 // also records its offset from the start of the real test (for the time-on-task chart).
 import { useEffect, useReducer, useRef, useState } from 'react';
-import type { TestMode } from '../api.attention';
+import type { InputMethod, TestMode } from '../api.attention';
 
 export const TRIALS = 5;
 export const MIN_DELAY_MS = 2000;
@@ -36,6 +36,8 @@ export interface ReactionState {
   lastWasPractice?: boolean;
   /** performance.now() when the real (non-practice) test started. */
   startedAt?: number;
+  /** Input method of the first real response (click, tap or key). */
+  inputMethod?: InputMethod;
 }
 
 export interface StartOptions {
@@ -45,6 +47,7 @@ export interface StartOptions {
 
 export interface RawResult {
   mode: TestMode;
+  inputMethod?: InputMethod;
   trialsMs: number[];
   offsetsMs: number[];
   falseStarts: number;
@@ -80,6 +83,7 @@ function createController(render: () => void, onDone: { current: DoneHandler }) 
     set({ phase: 'done' });
     onDone.current({
       mode: state.mode,
+      inputMethod: state.inputMethod,
       trialsMs: state.trialsMs,
       offsetsMs: state.offsetsMs,
       falseStarts: state.falseStarts,
@@ -145,7 +149,11 @@ function createController(render: () => void, onDone: { current: DoneHandler }) 
       state = { ...INITIAL, mode: opts.mode ?? 'quick', practicing: opts.practice };
       wait();
     },
-    respond() {
+    respond(method?: InputMethod) {
+      const counts = state.phase === 'waiting' || state.phase === 'stimulus';
+      if (counts && !state.practicing && !state.inputMethod && method) {
+        state = { ...state, inputMethod: method };
+      }
       if (state.phase === 'waiting') {
         clear();
         set({

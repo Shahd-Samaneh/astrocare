@@ -7,12 +7,13 @@
 // measured time always comes from the controller (useReactionTest), so timing is identical.
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../../shared/components';
+import type { InputMethod } from '../api.attention';
 import { EXTENDED_DURATION_MS, TRIALS, isRunning, type ReactionState } from './useReactionTest';
 import styles from './Attention.module.css';
 
 export interface TestRunnerProps {
   state: ReactionState;
-  onRespond: () => void;
+  onRespond: (method: InputMethod) => void;
   onCancel: () => void;
 }
 
@@ -94,7 +95,7 @@ export function TestRunner({ state, onRespond, onCancel }: TestRunnerProps) {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'Space' || e.key === ' ') {
         e.preventDefault();
-        if (!e.repeat) onRespond();
+        if (!e.repeat) onRespond('keyboard');
       } else if (e.key === 'Escape') {
         e.preventDefault();
         onCancel();
@@ -165,7 +166,7 @@ export function TestRunner({ state, onRespond, onCancel }: TestRunnerProps) {
         className={`${styles.target} ${styles[`phase_${state.phase}`] ?? ''}`}
         onPointerDown={(e) => {
           e.preventDefault();
-          onRespond();
+          onRespond(e.pointerType === 'mouse' ? 'mouse' : 'touch'); // pen counts as touch
         }}
       >
         {state.phase === 'stimulus' && !reducedMotion ? (
