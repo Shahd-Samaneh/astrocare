@@ -105,3 +105,48 @@ Until merged, `server/features/assistant/settings.py` reads these keys from `thr
 - `ModeBadge`: "Local model" / "Template" badge.
 
 Both live in `app/src/features/support/assistant/components/` for now.
+
+
+---
+
+## Noura: Reports, comms, relax
+
+Local copies until merged:
+- Python: `server/features/reports/router.py` (`ReportItem`, `ReportItemIn`)
+- TS: `app/src/features/support/reports/types.ts` (coming with the reports screen)
+
+### N1. `ReportItem` (contracts §1) → `contracts.ts` + `models.py`
+
+```ts
+type ReportItemKind = 'alert' | 'cmo_question' | 'note';
+
+interface ReportItem {
+  id: string;
+  kind: ReportItemKind;
+  refId?: string | null;      // alert.id when kind = 'alert'
+  title: string;
+  text: string;
+  sourceFeature: 'monitoring' | 'daily' | 'assistant' | 'relax';
+  createdTs: string;
+  reportId?: string | null;   // set once the item is included in a report
+}
+```
+
+**Live now:**
+```
+POST   /api/reports/items   { kind, refId?, title, text, sourceFeature } -> 201 ReportItem
+GET    /api/reports/items?pending=true                                    -> ReportItem[]
+DELETE /api/reports/items/{id}                                            -> 204 (404 if unknown)
+```
+Python: `from server.features.reports.service import add_report_item`
+`add_report_item(kind, title, text, source_feature, ref_id=None) -> dict`
+
+`sourceFeature` adds `'relax'` to the contract list (the Relax "Request support" button).
+
+### N2. Tables (created by my own code, not `core/db.TABLES`)
+
+`report_items` is created with `CREATE TABLE IF NOT EXISTS` in `server/features/reports/service.py`, through `core.db.connect()`. `comms_windows` will follow the same way.
+
+### N3. `shared/api/client.ts`: `del` (same as Marah's A4)
+
+Needed for `DELETE /api/reports/items/{id}`. Until then my `reports/api.ts` uses `fetch('/api/...')` directly.
