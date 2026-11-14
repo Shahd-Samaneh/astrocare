@@ -4,6 +4,7 @@ Working stubs that read the DB. Extend freely inside this folder.
 """
 from __future__ import annotations
 
+import statistics
 from datetime import timedelta
 from typing import Literal, Optional
 
@@ -13,8 +14,8 @@ from pydantic import Field
 from server.core import db
 from server.core.config import iso, parse_ts, threshold, utcnow
 from server.core.models import (
-    METRICS, Alert, AlertStatus, ApiModel, CabinMetric, CabinReading, Metric, Profile, Quality,
-    Reading, Resource, Sensor,
+    CABIN_METRICS, METRICS, Alert, AlertStatus, ApiModel, CabinMetric, CabinReading, Metric, Profile,
+    Quality, Reading, Resource, Sensor,
 )
 from server.core.simulator import UNITS
 from server.core.status import mission_clock, mission_day_start
@@ -107,6 +108,90 @@ def list_cabin(metric: Optional[CabinMetric] = None, hours: float = Query(24, gt
         where += " AND metric = ?"
         params.append(metric)
     return [CabinReading.model_validate(r) for r in db.query("cabin_readings", where, tuple(params), order_by="ts")]
+
+
+# ---- Cabin "Today" status -------------------------------------------------
+# Status vocabulary for a cabin metric compared with its usual range/baseline.
+# "missing" means we have no reading at all for that metric.
+CabinStatus = Literal["usual", "above_usual", "below_usual", "missing"]
+
+
+class CabinLatest(ApiModel):
+    """Latest cabin reading plus whether it sits inside the usual range.
+
+    value/unit/ts describe the latest reading; status is the comparison result.
+    For co2 the status is judged on the 1-hour average, not this single value.
+    """
+
+    metric: CabinMetric
+    value: Optional[float] = None
+    unit: str
+    ts: Optional[str] = None
+    status: CabinStatus
+
+
+def _range_status(value: float, low: float, high: float) -> CabinStatus:
+    if value > high:
+        return "above_usual"
+    if value < low:
+        return "below_usual"
+    return "usual"
+
+
+def _cabin_status(metric: str, latest: CabinReading, now) -> CabinStatus:
+    """Compare the latest cabin reading with its configured usual range/baseline."""
+    if metric == "co2":
+        co2_max = threshold("co2_max")
+        if co2_max is None:
+            return "usual"  # no sourced limit yet; cannot judge
+        window = float(threshold("co2_avg_window_minutes"))
+        since = iso(now - timedelta(minutes=window))
+        rows = db.query("cabin_readings", "metric = ? AND ts >= ?", ("co2", since))
+        values = [r["value"] for r in rows] or [latest.value]
+        return "above_usual" if statistics.fmean(values) > co2_max else "usual"
+
+    if metric == "cabin_temp":
+        return _range_status(latest.value, threshold("cabin_temp_min"), threshold("cabin_temp_max"))
+
+    if metric == "humidity":
+        return _range_status(latest.value, threshold("humidity_min"), threshold("humidity_max"))
+
+    if metric == "noise":
+        days = float(threshold("noise_baseline_days"))
+        k = float(threshold("noise_sd_multiplier"))
+        since = iso(now - timedelta(days=days))
+        rows = db.query("cabin_readings", "metric = ? AND ts >= ?", ("noise", since))
+        values = [r["value"] for r in rows]
+        if len(values) < 2:
+            return "usual"  # not enough history for a baseline
+        mean, sd = statistics.fmean(values), statistics.stdev(values)
+        if sd == 0:
+            return "usual"
+        return _range_status(latest.value, mean - k * sd, mean + k * sd)
+
+    return "usual"
+
+
+@router.get("/cabin/latest")
+def cabin_latest() -> list[CabinLatest]:
+    """Latest reading per cabin metric with a 'usual'/'above_usual'/'below_usual' status.
+
+    co2 is compared with co2_max on its 1-hour average; cabin_temp and humidity
+    with their usual ranges; noise with its last-7-days mean ± 2 SD baseline.
+    """
+    now = utcnow()
+    out: list[CabinLatest] = []
+    for metric in CABIN_METRICS:
+        rows = db.query("cabin_readings", "metric = ?", (metric,), order_by="ts DESC", limit=1)
+        if not rows:
+            out.append(CabinLatest(metric=metric, value=None, unit=UNITS[metric], ts=None, status="missing"))
+            continue
+        latest = CabinReading.model_validate(rows[0])
+        out.append(CabinLatest(
+            metric=metric, value=latest.value, unit=latest.unit, ts=latest.ts,
+            status=_cabin_status(metric, latest, now),
+        ))
+    return out
 
 
 # ---- Body-systems tiles (Today screen) ------------------------------------
