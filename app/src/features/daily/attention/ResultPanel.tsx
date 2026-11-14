@@ -20,7 +20,13 @@ function pctText(pct: number | null) {
   return `${pct > 0 ? '+' : '−'}${Math.abs(pct).toFixed(0)} %`;
 }
 
-export function ResultPanel({ result, lastNightHours }: { result: TestResult; lastNightHours?: number | null }) {
+export function ResultPanel({
+  result,
+  lastNightHours,
+}: {
+  result: TestResult;
+  lastNightHours?: number | null;
+}) {
   const { test, pctVsBaseline, withinRange, baseline } = result;
   return (
     <div className={styles.result}>
@@ -39,7 +45,9 @@ export function ResultPanel({ result, lastNightHours }: { result: TestResult; la
           <dt>vs your baseline</dt>
           <dd>
             <span className={styles.statValue}>{pctText(pctVsBaseline)}</span>
-            {baseline.medianMs != null && <span className={styles.statSub}> of {Math.round(baseline.medianMs)} ms</span>}
+            {baseline.medianMs != null && (
+              <span className={styles.statSub}> of {Math.round(baseline.medianMs)} ms</span>
+            )}
           </dd>
         </div>
         <div className={styles.stat}>
@@ -61,7 +69,8 @@ export function ResultPanel({ result, lastNightHours }: { result: TestResult; la
         {baseline.rangeLowMs != null && baseline.rangeHighMs != null && (
           <>
             {' '}
-            · Usual range {Math.round(baseline.rangeLowMs)}–{Math.round(baseline.rangeHighMs)} ms ({baseline.n} earlier tests)
+            · Usual range {Math.round(baseline.rangeLowMs)}–{Math.round(baseline.rangeHighMs)} ms (
+            {baseline.n} earlier tests)
           </>
         )}
       </p>

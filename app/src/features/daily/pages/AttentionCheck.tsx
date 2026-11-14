@@ -15,10 +15,12 @@ import {
   type DailyAlert,
   type DailyCognitiveTest,
   type DailySummary,
+  type DailyThresholds,
   type TestResult,
 } from '../api.attention';
 import { HistoryChart } from '../attention/HistoryChart';
 import { EXPERIMENTAL_NOTE, ResultPanel } from '../attention/ResultPanel';
+import { SleepRtChart } from '../attention/SleepRtChart';
 import { TestRunner } from '../attention/TestRunner';
 import { TRIALS, isRunning, useReactionTest } from '../attention/useReactionTest';
 import styles from '../attention/Attention.module.css';
@@ -38,9 +40,10 @@ export default function AttentionCheck() {
   const retestId = params.get('retest');
   const { status } = useAppStatus();
 
-  const history = useApi<DailyCognitiveTest[]>(paths.tests(10));
+  const history = useApi<DailyCognitiveTest[]>(paths.tests(100));
   const baseline = useApi<AttentionBaseline>(paths.baseline);
-  const summary = useApi<DailySummary>(paths.summary(7));
+  const summary = useApi<DailySummary>(paths.summary(14));
+  const thresholds = useApi<DailyThresholds>(paths.thresholds);
   const alert = useApi<DailyAlert>(retestId ? paths.alert(retestId) : null);
 
   const [result, setResult] = useState<TestResult>();
@@ -174,7 +177,28 @@ export default function AttentionCheck() {
             ) : history.error ? (
               <ErrorState message={history.error.message} onRetry={history.reload} />
             ) : (
-              <HistoryChart tests={history.data ?? []} baseline={baseline.data} />
+              <HistoryChart tests={(history.data ?? []).slice(0, 10)} baseline={baseline.data} />
+            )}
+          </Card>
+        )}
+
+        {!running && (
+          <Card
+            title="Sleep and reaction time, last 14 days"
+            subtitle="Sleep per night (bars) and daily median of routine tests (line)"
+          >
+            {(summary.loading && !summary.data) || (history.loading && !history.data) ? (
+              <LoadingState />
+            ) : summary.error ? (
+              <ErrorState message={summary.error.message} onRetry={summary.reload} />
+            ) : (
+              <SleepRtChart
+                nights={summary.data?.sleep?.nights ?? []}
+                tests={history.data ?? []}
+                baseline={baseline.data}
+                thresholds={thresholds.data}
+                lastDay={status?.missionDay}
+              />
             )}
           </Card>
         )}

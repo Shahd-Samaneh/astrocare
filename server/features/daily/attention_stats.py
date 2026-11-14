@@ -21,6 +21,7 @@ from typing import Any, Iterable, Literal, Optional
 from server.core import db
 from server.core.config import parse_ts
 from server.core.models import Alert, ApiModel, CognitiveTest, NextStep
+from server.core.status import mission_clock
 
 from .thresholds import daily_threshold
 
@@ -33,6 +34,7 @@ FEW_TESTS_PCT = 10  # range = median ± 10 % when the baseline has fewer than 3 
 class DailyCognitiveTest(CognitiveTest):
     context: TestContext = "routine"
     related_alert_id: Optional[str] = None
+    mission_day: Optional[int] = None  # derived from ts (mission clock), never stored
 
 
 class NextStepAction(ApiModel):
@@ -83,7 +85,10 @@ def with_context(tests: Iterable[CognitiveTest | dict[str, Any]]) -> list[DailyC
     for t in tests:
         data = t.model_dump() if isinstance(t, CognitiveTest) else dict(t)
         context, related = ctx.get(data["id"], ("routine", None))
-        out.append(DailyCognitiveTest.model_validate({**data, "context": context, "related_alert_id": related}))
+        out.append(DailyCognitiveTest.model_validate({
+            **data, "context": context, "related_alert_id": related,
+            "mission_day": mission_clock(parse_ts(data["ts"]))[1],
+        }))
     return out
 
 

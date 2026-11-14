@@ -214,3 +214,64 @@
   border-left: 3px solid var(--warn-border);
   padding-left: 10px;
 }
+
+/* ---- sleep vs reaction time chart ---------------------------------------------- */
+.chartBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.swBar {
+  background: var(--accent-2);
+  opacity: 0.6;
+}
+
+.swShort {
+  height: 0;
+  border-top: 2px dashed var(--pink);
+}
+
+.swLine {
+  height: 3px;
+  background: var(--accent);
+}
+
+.swBand {
+  border: 1px dashed var(--accent-2);
+  background: var(--bg-active);
+}
+
+.swBoth {
+  background: var(--warn);
+}
+
+.caption {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-style: italic;
+}

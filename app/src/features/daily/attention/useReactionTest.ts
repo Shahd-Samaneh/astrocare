@@ -106,4 +106,5 @@ export function useReactionTest(onDone: DoneHandler) {
   return ctrl;
 }
 
-export const isRunning = (p: Phase) => p === 'waiting' || p === 'stimulus' || p === 'feedback' || p === 'falseStart';
+export const isRunning = (p: Phase) =>
+  p === 'waiting' || p === 'stimulus' || p === 'feedback' || p === 'falseStart';

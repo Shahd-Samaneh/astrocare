@@ -55,7 +55,16 @@ export function TestRunner({ state, onRespond, onCancel }: TestRunnerProps) {
         </span>
         <ol className={styles.dots} aria-hidden>
           {Array.from({ length: TRIALS }, (_, i) => (
-            <li key={i} className={i < state.trialsMs.length ? styles.dotDone : i === state.trialsMs.length ? styles.dotNow : ''} />
+            <li
+              key={i}
+              className={
+                i < state.trialsMs.length
+                  ? styles.dotDone
+                  : i === state.trialsMs.length
+                    ? styles.dotNow
+                    : ''
+              }
+            />
           ))}
         </ol>
         <Button variant="ghost" onClick={onCancel} aria-label="Cancel the test (Esc)">

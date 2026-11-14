@@ -17,7 +17,10 @@ function label(ts: string) {
 
 export function HistoryChart({ tests, baseline }: HistoryChartProps) {
   const t = useChartTheme();
-  if (!tests.length) return <EmptyState title="No attention tests yet" description="Your results will appear here." />;
+  if (!tests.length)
+    return (
+      <EmptyState title="No attention tests yet" description="Your results will appear here." />
+    );
 
   const rows = [...tests].reverse().map((x) => ({
     when: label(x.ts),
@@ -33,7 +36,9 @@ export function HistoryChart({ tests, baseline }: HistoryChartProps) {
         }
       : undefined;
   const summary = `Median reaction time of the last ${rows.length} tests, from ${rows[0].medianMs} ms to ${rows[rows.length - 1].medianMs} ms${
-    band ? `. Usual range ${Math.round(band.mean - band.sd)} to ${Math.round(band.mean + band.sd)} ms` : ''
+    band
+      ? `. Usual range ${Math.round(band.mean - band.sd)} to ${Math.round(band.mean + band.sd)} ms`
+      : ''
   }.`;
 
   return (
@@ -42,9 +47,19 @@ export function HistoryChart({ tests, baseline }: HistoryChartProps) {
         <CartesianGrid {...t.grid} />
         <XAxis dataKey="when" {...t.axis} interval="preserveStartEnd" minTickGap={24} />
         <YAxis {...t.axis} domain={['auto', 'auto']} unit=" ms" width={64} />
-        <Tooltip {...t.tooltip} formatter={(v, _n, item) => [`${v} ms`, item?.payload?.kind ?? 'Median']} />
+        <Tooltip
+          {...t.tooltip}
+          formatter={(v, _n, item) => [`${v} ms`, item?.payload?.kind ?? 'Median']}
+        />
         {baselineBand(band, 1, t)}
-        <Line dataKey="medianMs" name="Median" stroke={t.colors.accent} strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />
+        <Line
+          dataKey="medianMs"
+          name="Median"
+          stroke={t.colors.accent}
+          strokeWidth={2}
+          dot={{ r: 3 }}
+          isAnimationActive={false}
+        />
       </LineChart>
     </ChartFrame>
   );

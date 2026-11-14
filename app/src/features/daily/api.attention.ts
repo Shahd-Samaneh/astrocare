@@ -7,10 +7,15 @@ import { api } from '../../shared/api/client';
 import type { Alert, CheckIn, CognitiveTest, NextStep } from '../../shared/types/contracts';
 
 export type TestContext = 'routine' | 'retest';
+export type TestMode = 'quick' | 'extended';
 
 export interface DailyCognitiveTest extends CognitiveTest {
   context: TestContext;
   relatedAlertId?: string | null;
+  /** Mission day of the test (derived on the server). */
+  missionDay?: number | null;
+  /** 'quick' (5 trials) or 'extended' (3 min). Absent on older servers = quick. */
+  mode?: TestMode;
 }
 
 export interface AttentionBaseline {
@@ -66,10 +71,31 @@ export interface NewCheckIn {
   skipped: boolean;
 }
 
+/** One night from sleep_summary (Nadia) or our fallback. Extra fields may be absent. */
+export interface SleepNight {
+  missionDay: number;
+  hours: number;
+  date?: string;
+  awakenings?: number;
+  selfQuality?: number | null;
+  start?: string;
+  end?: string;
+  source?: string;
+}
+
+export interface ThresholdInfo {
+  value: number | null;
+  unit: string;
+  source: string;
+  note: string;
+}
+export type DailyThresholds = Record<string, ThresholdInfo>;
+
 export interface DailySummary {
   days: number;
   sleep: {
-    lastNight?: { hours: number; missionDay?: number; selfQuality?: number | null } | null;
+    nights?: SleepNight[];
+    lastNight?: SleepNight | null;
     personalAvgHours?: number | null;
   };
   attention: {
@@ -90,6 +116,7 @@ export const paths = {
   baseline: '/tests/baseline',
   summary: (days = 7) => `/daily/summary?days=${days}`,
   sources: '/daily/sources',
+  thresholds: '/daily/thresholds',
   alert: (id: string) => `/alerts/${encodeURIComponent(id)}`,
 };
 
