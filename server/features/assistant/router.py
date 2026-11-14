@@ -18,6 +18,9 @@ from server.core import db
 from server.core.config import app_config
 from server.core.models import ApiModel
 
+from .models import AssistantPermissions, PermissionsPatch
+from .permissions import get_permissions, set_permissions
+
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 
 DOSE_PATTERN = re.compile(r"\b(dose|dosage|doses|mg|milligram|mcg|how many (pills|tablets))\b", re.I)
@@ -66,6 +69,16 @@ def ask(body: AskIn) -> AskOut:
                 "reference texts in /references and list its sources."),
         sources=[], missing=["Reference texts not indexed yet"], refused=False, model=model,
     )
+
+
+@router.get("/permissions")
+def read_permissions() -> AssistantPermissions:
+    return AssistantPermissions.model_validate(get_permissions())
+
+
+@router.put("/permissions")
+def update_permissions(body: PermissionsPatch) -> AssistantPermissions:
+    return AssistantPermissions.model_validate(set_permissions(body.model_dump(exclude_none=True)))
 
 
 class AssistantInfo(ApiModel):
