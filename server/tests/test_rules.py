@@ -15,7 +15,7 @@ def test_thresholds_have_sources():
     for name, t in thresholds().items():
         assert t.source, f"threshold {name} has no source"
     assert threshold("stale_minutes") == 120
-    assert threshold("co2_max") is None
+    assert threshold("co2_max") == 3  # sourced before the demo (NASA OCHMO TB-004)
 
 
 def test_stale_rule_fires_on_skin_temp(client):  # client fixture seeds the DB
