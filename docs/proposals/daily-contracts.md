@@ -160,3 +160,48 @@ Also update the docstring at the top of the file: "* no check-in today (R-FAT-01
 ## 5. Small note: `test_health.py`
 
 `POST /api/tests` now returns the contract shape `{ test, pctVsBaseline, withinRange }`. So the one assertion in `server/tests/test_health.py::test_posts_accept_camel_case` that read `.json()["lapses"]` now reads `.json()["test"]["lapses"]`. That's a one-line change, made by Shahd in her branch, and called out here so the reviewer sees it.
+
+---
+
+## 6. Config: nested `daily:` thresholds
+
+**Why:**
+1. The task asked for a `daily:` section in `config/thresholds.yaml`, but `core/config.thresholds()` only reads flat keys.
+2. Three keys now exist twice (`sleep_short_hours`, `attention_slower_pct`, `pvt_lapse_ms`, top level and under `daily:`), and the two copies could drift apart.
+3. A small loader change makes nested groups first-class and keeps `threshold("daily.pvt_lapse_ms")` simple.
+
+`server/core/config.py`
+```diff
+ @lru_cache
+ def thresholds() -> dict[str, Threshold]:
+     raw = _load_yaml("thresholds.yaml")
+-    return {
+-        key: Threshold(
+-            value=entry.get("value"),
+-            unit=str(entry.get("unit", "")),
+-            source=str(entry.get("source", "")),
+-            note=str(entry.get("note", "")),
+-        )
+-        for key, entry in raw.items()
+-    }
++    out: dict[str, Threshold] = {}
++
++    def add(key: str, entry: dict) -> None:
++        out[key] = Threshold(value=entry.get("value"), unit=str(entry.get("unit", "")),
++                             source=str(entry.get("source", "")), note=str(entry.get("note", "")))
++
++    for key, entry in raw.items():
++        nested = {k: v for k, v in entry.items() if isinstance(v, dict)}
++        if nested:  # a group such as `daily:`
++            for sub, sub_entry in nested.items():
++                add(f"{key}.{sub}", sub_entry)
++        else:
++            add(key, entry)
++    return out
+```
+After the merge:
+- delete the duplicated top-level keys
+- remove the group header (`value`/`source`/`note` directly under `daily:`)
+- switch `server/features/daily/thresholds.py` to `threshold("daily.<key>")`
+
+**Workaround now:** `server/features/daily/thresholds.py::daily_threshold()` reads `daily.<key>` with the core `_load_yaml`, falling back to the top-level key. The `daily:` group has its own `source`/`note` so `test_thresholds_have_sources` still passes.
