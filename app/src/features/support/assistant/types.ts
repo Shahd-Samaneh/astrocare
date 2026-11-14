@@ -2,7 +2,9 @@
 // Switch to imports from shared/types/contracts.ts once Haya merges them.
 
 export type RefusalReason = 'medication' | 'diagnosis';
-export type AnswerMode = 'llm' | 'fallback';
+// llm: local model; fallback: template (model off / too slow);
+// alert / data: built on the device from the open alert / your data, without the model
+export type AnswerMode = 'llm' | 'fallback' | 'alert' | 'data';
 
 export interface AssistantSource {
   id: string;
@@ -18,6 +20,8 @@ export interface AssistantAnswer {
   refusalReason?: RefusalReason | null;
   mode: AnswerMode;
   latencyMs: number;
+  note?: string | null; // small notice under the badge (template / too slow / cut off)
+  alertRuleId?: string | null; // mode 'alert': the rule the answer explains
 }
 
 export interface AssistantPermissions {

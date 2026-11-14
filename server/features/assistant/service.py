@@ -1,10 +1,13 @@
 """The /ask flow, as a stream of events (answer_events) or one final answer (answer_question).
 
 1. safety filter (before the model)  -> fixed refusal, nothing sent to Ollama
-2. user context (permissions, no notePrivate) + top-k reference chunks
-3. local model, streamed token by token; no first token within the first-token timeout -> 4
-4. template fallback from the latest alert
-5. every answer is logged to assistant_log
+2. alert question ("why did I get the alert?", a rule id) -> built from the alert (mode "alert"), no model
+   "my data" question ("last 7 days", "بياناتي")          -> built from the fixed facts (mode "data"), no model
+3. user context (permissions, no notePrivate) + top-k reference chunks
+4. local model, streamed token by token; no first token within the first-token timeout -> 5
+   an answer left empty by post-processing -> "This isn't in the on-board references or your data."
+5. template fallback from the most important open alert (the reason goes in `note`, not in `missing`)
+6. every answer is logged to assistant_log
 
 Events (NDJSON lines on POST /api/assistant/ask/stream):
   {"type": "token", "text": "..."}     a piece of the answer (safe to show)
@@ -19,9 +22,10 @@ from typing import Any, Iterator
 
 from . import llm, store
 from .context import build_context, latest_alert
-from .fallback import build_fallback, dedupe
+from .direct import alert_answer, data_answer, is_alert_question
+from .fallback import build_fallback, dedupe, fallback_note
 from .models import AssistantAnswer, AssistantSource
-from .prompt import SYSTEM_PROMPT, build_prompt, ensure_data_coverage, is_data_question, parse_answer, user_data_prefix
+from .prompt import CITE_ANY, SYSTEM_PROMPT, build_prompt, is_data_question, parse_answer, user_data_prefix
 from .retrieval import retrieve
 from .safety import check_question, is_arabic, medicine_terms, mentions_medicine_name, refusal_text
 from .settings import chat_model, setting
@@ -36,6 +40,51 @@ _INCOMPLETE = {
     "en": "The local model stopped before finishing: this answer may be incomplete",
     "ar": "الموديل المحلي وقف قبل ما يخلّص: الجواب ممكن يكون ناقص",
 }
+
+
+_NOT_FOUND = {
+    "en": "This isn't in the on-board references or your data.",
+    "ar": "هاي المعلومة مش موجودة بالمراجع اللي على المركبة ولا ببياناتك.",
+}
+_QUESTION_LEAD = re.compile(
+    r"^\s*(?:(?:what|who|where|when|which|how|why)(?:'s)?(?:\s+(?:is|are|was|were|does|do|did|much|many|long|about))?"
+    r"|(?:can|could|do|does|is|are)\s+you\s+(?:tell me|explain)(?:\s+about)?|tell me about|explain)\s+",
+    re.I,
+)
+_QUESTION_LEAD_AR = re.compile(r"^\s*(?:شو|ايش|إيش|ما هي|ما هو|ما|ماذا|كم|وين|أين|متى|ليش|لماذا|كيف|قديش)\s+")
+
+
+def question_topic(question: str) -> str:
+    """'What is the temperature on Mars?' -> 'the temperature on Mars' (the MISSING item)."""
+    q = question.strip().rstrip("?؟!. ")
+    t = _QUESTION_LEAD_AR.sub("", _QUESTION_LEAD.sub("", q, count=1), count=1).strip()
+    return t or q
+
+
+def is_empty_answer(text: str) -> bool:
+    """Nothing left to read: no words once citations, bullets and punctuation are gone."""
+    return not re.sub(r"[\s\-*•#>_.,;:!?؟()]+", "", CITE_ANY.sub("", text or ""))
+
+
+# a MISSING item that is a notice or advice, not missing data
+_NOT_DATA = re.compile(r"template|local model|incomplete|next steps?|قالب|الموديل|الخطوات", re.I)
+_ADVICE = re.compile(r"^\s*(?:protect|repeat|rest|consult|talk to|ask|contact|try|avoid|keep|schedule|follow|get|go|"
+                     r"take|drink|reduce|increase|log|record|do)\b", re.I)
+
+
+def real_missing(items: list[str], ctx: dict) -> list[str]:
+    """Only real missing data: no template / model notices, and no next steps (the model often
+    copies the alert's next steps or its own advice into MISSING)."""
+    steps = [" ".join(str(s).split()).casefold() for a in ctx.get("alerts") or [] for s in a.get("nextSteps") or []]
+    out = []
+    for item in items:
+        key = " ".join(item.split()).casefold().rstrip(".")
+        if _NOT_DATA.search(item) or _ADVICE.match(item):
+            continue
+        if any(key and (key in s or s.rstrip(".") in key) for s in steps if s):
+            continue
+        out.append(item)
+    return out
 
 
 def _answer_mentions_medicine(text: str, terms: set[str]) -> bool:
@@ -91,6 +140,14 @@ def answer_events(
     reason = check_question(question, terms)
     if reason:
         out = _refusal(question, reason, t0)
+    elif is_alert_question(question):  # built from the alert's own fields: no model, instant
+        answer, sources, missing, rule_id = alert_answer(question, arabic=arabic)
+        out = AssistantAnswer(answer=answer, sources=sources, missing=missing, refused=False, mode="alert",
+                              alert_rule_id=rule_id, latency_ms=_ms(t0))
+    elif is_data_question(question):  # built from the fixed facts: no model, instant
+        answer, sources, missing = data_answer(build_context(), arabic=arabic)
+        out = AssistantAnswer(answer=answer, sources=sources, missing=missing, refused=False, mode="data",
+                              latency_ms=_ms(t0))
     else:
         try:
             ctx = build_context()
@@ -99,9 +156,8 @@ def answer_events(
             # the first-token deadline counts from the question, so retrieval time is included
             remaining = max(first_timeout - (time.perf_counter() - t0), 1.0)
             full, shown, blocked = "", 0, False
-            # "my data" summaries need room for every data area; other answers stay shorter
-            max_tokens = int(setting("assistant_max_summary_tokens" if is_data_question(question)
-                                     else "assistant_max_answer_tokens"))
+            # Arabic answers are slower per token and drift more: shorter cap
+            max_tokens = int(setting("assistant_max_arabic_tokens" if arabic else "assistant_max_answer_tokens"))
             for item in llm.chat_stream(prompt.system, prompt.user, model=model, first_token_timeout=remaining,
                                         max_total_sec=max_total_sec, max_tokens=max_tokens):
                 if isinstance(item, llm.ChatResult):
@@ -125,21 +181,23 @@ def answer_events(
                 parsed = parse_answer(result.text, prompt, arabic=arabic, embed_fn=_embed_for_check,
                                       min_similarity=float(setting("assistant_citation_min_similarity")))
                 citation_report = parsed.citation_report
-                parsed = ensure_data_coverage(parsed, prompt, ctx, question, arabic=arabic)
-                missing = parsed.missing
-                if not result.complete:
-                    # a cut-off answer can only have a cut-off MISSING line: don't trust its items
-                    missing = [_INCOMPLETE["ar" if arabic else "en"]]
+                # a cut-off answer can only have a cut-off MISSING line: don't trust its items
+                missing = real_missing(parsed.missing, ctx) if result.complete else []
+                note = None if result.complete else _INCOMPLETE["ar" if arabic else "en"]
+                answer, sources = parsed.answer, parsed.sources
+                if is_empty_answer(answer):  # everything was removed (or the model only wrote MISSING)
+                    answer, sources = _NOT_FOUND["ar" if arabic else "en"], []
+                    missing = [question_topic(question)]
                 out = AssistantAnswer(
-                    answer=parsed.answer,
-                    sources=[AssistantSource(id=s.id, title=s.title, url=s.url) for s in parsed.sources],
-                    missing=dedupe(missing), refused=False, mode="llm", latency_ms=_ms(t0),
+                    answer=answer,
+                    sources=[AssistantSource(id=s.id, title=s.title, url=s.url) for s in sources],
+                    missing=dedupe(missing), refused=False, mode="llm", note=note, latency_ms=_ms(t0),
                 )
         except llm.OllamaError as e:  # Ollama off, error, or no first token in time
             reason = "slow" if isinstance(e, llm.FirstTokenTimeout) else "unavailable"
             answer, sources, missing = build_fallback(latest_alert(), arabic=arabic, reason=reason)
             out = AssistantAnswer(answer=answer, sources=sources, missing=missing, refused=False,
-                                  mode="fallback", latency_ms=_ms(t0))
+                                  mode="fallback", note=fallback_note(reason, arabic=arabic), latency_ms=_ms(t0))
 
     first_ms = result.first_token_ms if result and out.mode == "llm" else None
     store.log_answer(question, out.latency_ms, out.mode, out.refused, out.refusal_reason,

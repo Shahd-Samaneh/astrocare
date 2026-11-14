@@ -128,6 +128,14 @@
   color: var(--warn);
 }
 
+/* template / too slow / cut-off notice, right under the badge */
+.note {
+  margin: -4px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-faint);
+}
+
 .thinking {
   display: flex;
   align-items: center;

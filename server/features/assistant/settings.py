@@ -20,7 +20,7 @@ _PENDING_DEFAULTS: dict[str, Any] = {
     "assistant_chunk_words": 300,
     "assistant_chunk_overlap_words": 40,
     "assistant_max_answer_tokens": 200,
-    "assistant_max_summary_tokens": 180,
+    "assistant_max_arabic_tokens": 150,  # Arabic questions to the model ("my data" is answered in code)
     "assistant_citation_min_similarity": 0.775,  # calibrated 2026-11-14, see proposal A5
     "assistant_num_ctx": 4096,
 }

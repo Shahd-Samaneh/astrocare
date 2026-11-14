@@ -10,7 +10,9 @@ from pydantic import Field
 from server.core.models import ApiModel
 
 RefusalReason = Literal["medication", "diagnosis"]
-AnswerMode = Literal["llm", "fallback"]
+# llm: the local model; fallback: template (model off / too slow);
+# alert / data: built in code from the open alert / the fixed facts (no model)
+AnswerMode = Literal["llm", "fallback", "alert", "data"]
 
 
 class AskIn(ApiModel):
@@ -31,6 +33,8 @@ class AssistantAnswer(ApiModel):
     refusal_reason: Optional[RefusalReason] = None
     mode: AnswerMode
     latency_ms: int
+    note: Optional[str] = None           # small notice under the badge (template / slow / cut off)
+    alert_rule_id: Optional[str] = None  # mode "alert": the rule the answer explains
 
 
 class AssistantPermissionsGroup(ApiModel):

@@ -34,18 +34,8 @@
   color: var(--accent-2);
 }
 
-.text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
 .title {
+  min-width: 0;
   color: var(--text-2);
-}
-
-.url {
-  color: var(--text-faint);
-  font-size: 12px;
   overflow-wrap: anywhere;
 }

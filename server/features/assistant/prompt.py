@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from .citecheck import EmbedFn, check_citations
 from .facts import SENTENCE, Fact, build_facts, contradicted_facts
 from .retrieval import Hit
-from .wording import soften_causes
+from .wording import address_user, soften_causes
 
 
 @dataclass
@@ -50,11 +50,16 @@ Rules (all mandatory):
 7. When the question is about the user's own data, cover every "Your data" source (vital signs, sleep, attention tests, exercise, check-ins) and cite each one; say so when a source has no data or is not shared.
 8. A line starting with "FIXED FACT:" holds exact values computed from the data. Use those numbers and words exactly as written, cite that source, and never contradict them (for example, do not say "no lapses" if the fact gives lapses, and do not call data stale unless the fact says stale).
 9. All data is simulated. Keep the answer short: at most 6 sentences.
-10. Write the answer in the language given on the LANGUAGE line.
-11. Finish with one last line, exactly in this form (the word MISSING stays in English):
+10. Talk to the user directly as "you" and "your". Never write "the astronaut" or "the user".
+11. Write the answer in the language given on the LANGUAGE line.
+12. Finish with one last line, exactly in this form (the word MISSING stays in English):
 MISSING: <information you needed but did not find, separated by ";">
 or
 MISSING: none"""
+
+# Arabic answers drift into general medical claims more often: one extra rule, in the user message
+# tail (so SYSTEM_PROMPT stays byte-identical and cached).
+ARABIC_RULE = "RULE: Do not add medical claims that aren't in the context above."
 
 # kept for callers that format it; the prompt no longer has placeholders
 SYSTEM_TEMPLATE = SYSTEM_PROMPT
@@ -129,6 +134,8 @@ def build_prompt(question: str, ctx: dict, hits: list[Hit], *, arabic: bool) -> 
     user = (
         user_data_prefix(ctx)
         + ("\n\n".join(_block(len(fixed) + i + 1, s) for i, s in enumerate(ref_sources)) if ref_sources else "(none found)")
+        # per-question tail (after the cached prefix): the Arabic-only rule goes here, not in SYSTEM_PROMPT
+        + ("\n\n" + ARABIC_RULE if arabic else "")
         + f"\n\nLANGUAGE: {'Arabic' if arabic else 'English'}\nQUESTION: {question}"
     )
     return Prompt(system=SYSTEM_PROMPT, user=user, sources=sources, facts=facts)
@@ -137,6 +144,7 @@ def build_prompt(question: str, ctx: dict, hits: list[Hit], *, arabic: bool) -> 
 _MISSING_LINE = re.compile(r"^[ \t*_>-]*MISSING[*_]*\s*[:：][*_]*\s*(.*)$", re.I | re.M)
 _NONE = {"none", "nothing", "n/a", "-", "لا شيء", "لا يوجد", "ما في", "لا"}
 _CITE = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+CITE_ANY = _CITE  # "[1]", "[1, 2]" (and each part of "[1][2]")
 
 
 @dataclass
@@ -278,6 +286,8 @@ def parse_answer(text: str, prompt: Prompt, *, arabic: bool = False,
     text = _enforce_facts(text, prompt, arabic=arabic)
     user_nums = {i + 1 for i, s in enumerate(prompt.sources) if not s.is_reference}
     text = soften_causes(text, user_nums, arabic=arabic)
+    if not arabic:
+        text = address_user(text)
     report: list[dict] = []
     if embed_fn is not None and min_similarity is not None:
         text, report = check_citations(text, prompt.sources, embed_fn, float(min_similarity), arabic=arabic)
@@ -297,43 +307,51 @@ def parse_answer(text: str, prompt: Prompt, *, arabic: bool = False,
     text = _CITE.sub(_renumber, text)
     text = re.sub(r"[ \t]+([.,;:])", r"\1", text)
     text = re.sub(r"[ \t]{2,}", " ", text).strip()
-    return Parsed(answer=text, sources=[prompt.sources[i] for i in order], missing=missing, citation_report=report)
+    text = split_citations(merge_list_citations(text))
+    return Parsed(answer=text, sources=[prompt.sources[i] for i in order],
+                  missing=_drop_false_missing(missing, prompt.facts), citation_report=report)
 
 
-# ---- "my data" questions: always cover sleep and attention --------------------------------
+_TRAIL_CITES = re.compile(r"((?:[ \t]*\[\d+(?:\s*,\s*\d+)*\])+)([ \t]*[.!?؟]?)[ \t]*$")
+
+
+def _trail_set(line: str) -> frozenset[int]:
+    m = _TRAIL_CITES.search(line)
+    return frozenset(int(n) for c in _CITE.finditer(m.group(1)) for n in c.group(1).split(",")) if m else frozenset()
+
+
+def merge_list_citations(text: str) -> str:
+    """Consecutive list items ending with the same citations: cite once, on the last item.
+    '- A [1, 2]\\n- B [1, 2]' -> '- A\\n- B [1, 2]'."""
+    lines = text.split("\n")
+    i = 0
+    while i < len(lines):
+        key = _trail_set(lines[i]) if _LIST_ITEM.match(lines[i]) else frozenset()
+        j = i
+        while key and j + 1 < len(lines) and _LIST_ITEM.match(lines[j + 1]) and _trail_set(lines[j + 1]) == key:
+            j += 1
+        for k in range(i, j):  # all but the last item of the run
+            m = _TRAIL_CITES.search(lines[k])
+            lines[k] = lines[k][: m.start()].rstrip() + m.group(2).strip()
+        i = j + 1
+    return "\n".join(lines)
+
+
+def split_citations(text: str) -> str:
+    """'[1, 2]' -> '[1][2]' (how the screen shows citations)."""
+    return _CITE.sub(lambda m: "".join(f"[{n.strip()}]" for n in m.group(1).split(",")), text)
+
+
+# ---- "my data" questions: answered in code from the fixed facts (direct.py), never by the model
 _DATA_QUESTION = re.compile(
-    r"\b(my (data|numbers|week|stats|health)|last (7|seven) days|this week|past week|how am i doing|summar\w*)\b"
-    r"|بياناتي|اخر 7 ايام|آخر 7 أيام|اخر سبع ايام|آخر سبع أيام|هالاسبوع|هذا الاسبوع|ملخص",
+    r"\b(my (data|numbers|stats|readings)|(last|past) (7|seven) days|how am i doing|summar(y|ise|ize) (of )?my)\b"
+    r"|بياناتي|[اآ]خر (7|سبع|سبعة) [اأ]يام|ملخص بيانات",
     re.I,
 )
 
 
 def is_data_question(question: str) -> bool:
     return bool(_DATA_QUESTION.search(question))
-
-
-def ensure_data_coverage(parsed: Parsed, prompt: Prompt, ctx: dict, question: str, *, arabic: bool) -> Parsed:
-    """For a "my data" question, add the fixed fact line for sleep, attention and vital signs
-    when the model left them out (cited), and drop "missing" items that claim a whole data area
-    we do have. The lines come from the data only (no interpretation)."""
-    if not is_data_question(question):
-        return parsed
-    missing = _drop_false_missing(parsed.missing, prompt.facts)
-    cited = {s.id for s in parsed.sources}
-    by_id = {s.id: s for s in prompt.sources}
-    extra = [prompt.facts[k] for k in ("sleep", "attention", "vitals")
-             if k in prompt.facts and prompt.facts[k].source_id not in cited and prompt.facts[k].source_id in by_id]
-    if not extra:
-        return Parsed(answer=parsed.answer, sources=parsed.sources, missing=missing,
-                      citation_report=parsed.citation_report)
-    sources = list(parsed.sources)
-    lines = []
-    for f in extra:
-        sources.append(by_id[f.source_id])
-        line = f.text(arabic)
-        lines.append(f"- {line[:-1] if line.endswith('.') else line} [{len(sources)}]")
-    return Parsed(answer=parsed.answer.rstrip() + "\n\n" + "\n".join(lines), sources=sources, missing=missing,
-                  citation_report=parsed.citation_report)
 
 
 # a "missing" item that names a whole data area (not one reading)

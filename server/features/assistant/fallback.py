@@ -1,9 +1,11 @@
 """Template answer built from an alert, used when the local model is off, fails or is too slow.
 
-- says why: "too slow" (no first token in time) or "not available" (off / error)
+- says why ("too slow" / "not available") in a note shown under the badge, not in the answer
+  or the missing list
 - explains the most important open alert (highest level, then newest), not just the newest
 - the alert's missing data is listed once (on the "missing information" line, not also in the text)
-- [1] is cited once, and each source appears once in the source list
+- [1] is cited once per list (at its end), and each source appears once in the source list
+- build_alert_answer is also the no-model answer to "why did I get the alert?"
 """
 from __future__ import annotations
 
@@ -22,10 +24,7 @@ _LABELS = {
         "alert": "Alert", "changed": "What changed", "data": "Data used",
         "factors": "Possible factors (a possible link, not a confirmed cause)", "next": "Next steps",
         "locked": "needs CMO review", "none": "none",
-        "no_alert_slow": "The local model is taking too long right now, and there is no open alert to explain. Try again in a moment.",
-        "no_alert_unavailable": "The local model is not available right now, and there is no open alert to explain. Try again in a moment.",
-        "missing_slow": "The local model was too slow: this is a template answer, not an answer to your exact question",
-        "missing_unavailable": "Local model unavailable: this is a template answer, not an answer to your exact question",
+        "no_alert": "There is no open alert to explain right now. Try again in a moment.",
         "see_missing": "see the missing information below",
     },
     "ar": {
@@ -34,10 +33,7 @@ _LABELS = {
         "alert": "التنبيه", "changed": "شو تغيّر", "data": "البيانات المستخدمة",
         "factors": "عوامل محتملة (ارتباط محتمل، مش سبب مؤكد)", "next": "الخطوات الجاية",
         "locked": "بحاجة لمراجعة الـ CMO", "none": "ما في",
-        "no_alert_slow": "الموديل المحلي بطيء كتير هلق، وما في تنبيه مفتوح لشرحه. جرّب كمان شوي.",
-        "no_alert_unavailable": "الموديل المحلي مش متاح هلق، وما في تنبيه مفتوح لشرحه. جرّب كمان شوي.",
-        "missing_slow": "الموديل المحلي كان بطيء كتير: هاد جواب من قالب، مش جواب لسؤالك بالضبط",
-        "missing_unavailable": "الموديل المحلي مش متاح: هاد جواب من قالب، مش جواب لسؤالك بالضبط",
+        "no_alert": "ما في تنبيه مفتوح لشرحه هلق. جرّب كمان شوي.",
         "see_missing": "شوف المعلومات الناقصة تحت",
     },
 }
@@ -64,15 +60,20 @@ def dedupe(items: list[str]) -> list[str]:
     return out
 
 
-def build_fallback(alert: dict | None, *, arabic: bool,
-                   reason: FallbackReason = "unavailable") -> tuple[str, list[AssistantSource], list[str]]:
-    """Return (answer, sources, missing) from the alert's fields."""
+def fallback_note(reason: FallbackReason, *, arabic: bool) -> str:
+    """The small notice shown under the badge: why this is a template answer."""
+    return _LABELS["ar" if arabic else "en"][f"intro_{reason}"]
+
+
+def build_alert_answer(alert: dict, *, arabic: bool) -> tuple[str, list[AssistantSource], list[str]]:
+    """Explain one alert from its own fields: (answer, sources, missing). Used for alert questions
+    (no model) and by the template fallback. The alert is cited once, at the end of each list."""
     L = _LABELS["ar" if arabic else "en"]
-    if not alert:
-        return L[f"no_alert_{reason}"], [], [L[f"missing_{reason}"]]
 
     def bullets(items: list[str]) -> str:
-        return "\n".join(f"- {i}" for i in items) if items else f"- {L['none']}"
+        if not items:
+            return f"- {L['none']}"
+        return "\n".join(f"- {i}" for i in items[:-1] + [f"{items[-1]} [1]"])
 
     steps = []
     for s in alert.get("nextSteps") or []:
@@ -86,9 +87,8 @@ def build_fallback(alert: dict | None, *, arabic: bool,
         used += f" ({L['see_missing']})"
 
     answer = "\n\n".join([
-        L[f"intro_{reason}"],
         f"**{L['alert']} {alert.get('ruleId')}: {alert.get('title')}**",
-        f"**{L['changed']}:** {alert.get('whatChanged')} [1]",
+        f"**{L['changed']}:** {str(alert.get('whatChanged') or '').rstrip('. ')} [1].",
         f"**{L['data']}:** {used}",
         f"**{L['factors']}:**\n{bullets(dedupe(alert.get('possibleFactors') or []))}",
         f"**{L['next']}:**\n{bullets(steps)}",
@@ -103,7 +103,17 @@ def build_fallback(alert: dict | None, *, arabic: bool,
             sources.append(AssistantSource(id=src, title=title, url=url))
         else:
             sources.append(AssistantSource(id=f"alert-source:{i}", title=src))
-    return answer, dedupe_sources(sources), dedupe([L[f"missing_{reason}"], *missing])
+    return answer, dedupe_sources(sources), missing
+
+
+def build_fallback(alert: dict | None, *, arabic: bool,
+                   reason: FallbackReason = "unavailable") -> tuple[str, list[AssistantSource], list[str]]:
+    """Return (answer, sources, missing) from the alert's fields. `missing` holds only real
+    missing data; the "template / too slow" notice is fallback_note(), shown under the badge."""
+    L = _LABELS["ar" if arabic else "en"]
+    if not alert:
+        return L["no_alert"], [], []
+    return build_alert_answer(alert, arabic=arabic)
 
 
 def dedupe_sources(sources: list[AssistantSource]) -> list[AssistantSource]:

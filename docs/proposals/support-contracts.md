@@ -22,10 +22,15 @@ interface AssistantAnswer {
   missing: string[];
   refused: boolean;
   refusalReason?: 'medication' | 'diagnosis';
-  mode: 'llm' | 'fallback';
+  // llm: local model · fallback: template (model off / too slow)
+  // alert / data: built in code from the open alert / the fixed facts, without the model
+  mode: 'llm' | 'fallback' | 'alert' | 'data';
   latencyMs: number;
+  note?: string;        // small notice under the badge (template / too slow / cut off); never in `missing`
+  alertRuleId?: string; // mode 'alert': the rule explained (badge "From alert R-FAT-01")
 }
 ```
+`missing` holds only real missing data (no template notice, no next steps).
 `POST /api/assistant/ask { question }` now returns this type. It replaces the stub's `AskOut` (`model` and `Source.path` are dropped).
 
 ### A2. `AssistantPermissions` (contracts §5)
@@ -100,11 +105,11 @@ assistant_max_answer_tokens:
   source: "Team decision (latency), not clinical"
   note: "Upper bound on the local model's answer length (keeps the reply inside the timeout)."
 
-assistant_max_summary_tokens:
-  value: 180
+assistant_max_arabic_tokens:
+  value: 150
   unit: tokens
   source: "Team decision (latency), not clinical"
-  note: "Answer length cap for 'my data' summary questions; other questions use assistant_max_answer_tokens. 180 (was 250): a shorter answer matters more than completeness in the demo; the summary still gets the fixed fact lines for sleep, attention and vitals when the model leaves them out."
+  note: "Answer length cap for Arabic questions sent to the model (replaces assistant_max_summary_tokens: 'my data' summaries are now built in code from the fixed facts, without the model)."
 
 assistant_citation_min_similarity:
   value: 0.775

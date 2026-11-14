@@ -121,7 +121,7 @@ def test_ollama_off_gives_fallback_from_alert(client, monkeypatch, mock_ctx):
     store.ensure_tables()
     with db.connect() as conn:  # make retrieval actually try to embed the question
         conn.execute("INSERT OR REPLACE INTO assistant_chunks VALUES ('t:0','t','T',NULL,0,'text','h','m','[1,0]')")
-    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
     assert body["mode"] == "fallback" and body["refused"] is False
     a = body["answer"]
     assert "R-FAT-01" in a
@@ -146,7 +146,7 @@ def test_note_private_never_in_prompt(client, fake_chat, mock_ctx):
 
 
 def test_cmo_locked_step_never_in_prompt(client, fake_chat, mock_ctx):
-    client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"})
+    client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"})
     _, user = fake_chat.calls[0]
     assert "Melatonin" not in user and "locked" in user
 
@@ -219,14 +219,21 @@ def _num(user: str, title_start: str) -> int:
 
 
 def test_arabic_question_asks_for_arabic_answer(client, fake_chat, mock_ctx):
-    client.post("/api/assistant/ask", json={"question": "ليش طلعلي التنبيه؟"})
+    client.post("/api/assistant/ask", json={"question": "ليش نومي قليل؟"})
     _, user = fake_chat.calls[0]
-    assert "LANGUAGE: Arabic\nQUESTION: ليش طلعلي التنبيه؟" in user
+    assert "LANGUAGE: Arabic\nQUESTION: ليش نومي قليل؟" in user
+    assert "RULE: Do not add medical claims that aren't in the context above." in user
+
+
+def test_english_prompt_has_no_arabic_rule(client, fake_chat, mock_ctx):
+    client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"})
+    _, user = fake_chat.calls[0]
+    assert "RULE:" not in user
 
 
 # ---- prompt layout (prompt cache) -----------------------------------------------------
 def test_system_prompt_identical_on_every_call(client, fake_chat, mock_ctx):
-    for q in ["Why did I get the alert?", "ليش طلعلي التنبيه؟", "How does radiation affect astronauts?"]:
+    for q in ["Is my sleep a problem?", "ليش نومي قليل؟", "How does radiation affect astronauts?"]:
         client.post("/api/assistant/ask", json={"question": q})
     systems = {s for s, _ in fake_chat.calls}
     assert len(systems) == 1
@@ -234,46 +241,119 @@ def test_system_prompt_identical_on_every_call(client, fake_chat, mock_ctx):
 
 
 def test_prompt_order_data_then_passages_then_question(client, fake_chat, mock_ctx):
-    client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"})
+    client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"})
     _, user = fake_chat.calls[0]
     i_data, i_alert = user.index("Your data: vital signs"), user.index("Alert R-FAT-01")
     i_refs, i_q = user.index("REFERENCE PASSAGES"), user.index("QUESTION:")
     assert i_data < i_alert < i_refs < i_q
-    assert user.rstrip().endswith("QUESTION: Why did I get the alert?")
+    assert user.rstrip().endswith("QUESTION: Is my sleep a problem?")
 
 
 def test_user_data_prefix_stable_between_questions(client, fake_chat, mock_ctx):
-    client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"})
+    client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"})
     client.post("/api/assistant/ask", json={"question": "How does radiation affect astronauts?"})
     (_, a), (_, b) = fake_chat.calls
     assert a.split("REFERENCE PASSAGES")[0] == b.split("REFERENCE PASSAGES")[0]
 
 
-# ---- "my data" questions cover sleep and attention, with citations ------------------
-def test_data_summary_adds_missing_sleep_and_attention(client, fake_chat, mock_ctx):
-    fake_chat.reply = lambda user: f"Heart rate is 74 bpm [{_num(user, 'Your data: vital signs')}].\nMISSING: none"
-    body = client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"}).json()
-    ids = [s["id"] for s in body["sources"]]
-    assert ids == ["user-data:vitals", "user-data:sleep", "user-data:attention"]
-    assert "Sleep, last 7 days: 5 nights" in body["answer"] and "[2]" in body["answer"]
-    assert "Attention tests, last 7 days: 2 tests" in body["answer"] and "[3]" in body["answer"]
-    assert "latest median reaction time 338 ms" in body["answer"]
+# ---- deterministic answers: alert and "my data" questions never reach the model --------
+@pytest.mark.parametrize("q, route", [
+    ("Why did I get the alert?", "alert"),
+    ("What does this alert mean?", "alert"),
+    ("Explain R-FAT-01", "alert"),
+    ("ليش طلعلي التنبيه؟", "alert"),
+    ("شو يعني هالتنبيه؟", "alert"),
+    ("What does my data from the last 7 days show?", "data"),
+    ("Summarize my data", "data"),
+    ("شو بتبيّن بياناتي آخر 7 أيام؟", "data"),
+    ("بياناتي", "data"),
+    ("How do alerts work?", None),
+    ("How was my mood this week?", None),
+    ("How can sleep loss affect my performance on the mission?", None),
+    ("ليش نومي قليل؟", None),
+])
+def test_question_routing_en_ar(q, route):
+    from server.features.assistant.direct import is_alert_question, is_data_question
+    got = "alert" if is_alert_question(q) else "data" if is_data_question(q) else None
+    assert got == route, q
 
 
-def test_data_summary_not_duplicated_when_model_covers_it(client, fake_chat, mock_ctx):
-    fake_chat.reply = lambda user: (f"You slept 5 h 20 m on average [{_num(user, 'Your data: sleep')}] and your "
-                                    f"attention was slower [{_num(user, 'Your data: attention')}].\nMISSING: none")
+def _no_model(monkeypatch):
+    monkeypatch.setattr(service.llm, "chat_stream", _must_not_call)
+    monkeypatch.setattr(service, "retrieve", _must_not_call)
+
+
+def test_alert_question_is_answered_from_the_alert_without_model(client, monkeypatch, mock_ctx):
+    _no_model(monkeypatch)
+    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    assert body["mode"] == "alert" and body["alertRuleId"] == "R-FAT-01" and body["note"] is None
+    a = body["answer"]
+    assert "**Alert R-FAT-01: Short sleep and slower attention**" in a
+    assert "Sleep averaged 5 h 20 m" in a and "Several short nights in a row" in a
+    assert "Protect an 8-hour sleep opportunity" in a and "Melatonin" not in a
+    # the alert is cited once at the end of each list, not on every bullet
+    assert "- Several short nights in a row\n" in a and "- Cabin noise during the sleep period [1]" in a
+    assert body["missing"] == ["Blood pressure: no reading since the start of mission day 142"]
+    assert body["sources"][0]["id"] == "alert:al-mock-fat01"
+
+
+def test_arabic_alert_question_uses_arabic_labels(client, monkeypatch, mock_ctx):
+    _no_model(monkeypatch)
+    body = client.post("/api/assistant/ask", json={"question": "ليش طلعلي التنبيه؟"}).json()
+    assert body["mode"] == "alert" and body["alertRuleId"] == "R-FAT-01"
+    assert "**التنبيه R-FAT-01:" in body["answer"] and "شو تغيّر" in body["answer"]
+    assert "عوامل محتملة" in body["answer"]
+
+
+def test_rule_id_in_question_picks_that_alert():
+    from server.features.assistant.direct import pick_alert_for
+    alerts = [{"id": "a", "ruleId": "R-FAT-01", "level": "review", "ts": "2026-11-14", "status": "new"},
+              {"id": "b", "ruleId": "R-HR-02", "level": "urgent", "ts": "2026-11-13", "status": "new"}]
+    assert pick_alert_for("Why did I get the alert?", alerts)["id"] == "b"   # highest level
+    assert pick_alert_for("What is r-fat-01?", alerts)["id"] == "a"          # named rule
+    assert pick_alert_for("Why the alert?", []) is None
+
+
+def test_data_question_is_answered_from_fixed_facts_without_model(client, monkeypatch, mock_ctx):
+    _no_model(monkeypatch)
     body = client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"}).json()
-    assert "Sleep, last 7 days" not in body["answer"] and "Attention tests, last 7 days" not in body["answer"]
-    assert [s["id"] for s in body["sources"]] == ["user-data:sleep", "user-data:attention", "user-data:vitals"]
+    assert body["mode"] == "data" and body["refused"] is False
+    a = body["answer"]
+    assert [s["id"] for s in body["sources"]] == ["user-data:vitals", "user-data:sleep",
+                                                    "user-data:attention", "user-data:exercise"]
+    assert "- Vital signs: up to date: heart rate, SpO₂, respiration rate" in a and a.count("[1]") == 1
+    assert "- Sleep, last 7 days: 5 nights recorded; average 6 h 01 m" in a and "3 night(s) under 6 h [2]" in a
+    assert "latest median reaction time 338 ms" in a and "[3]" in a
+    assert "- Exercise today: planned Resistive exercise (ARED) (60 min); not logged yet [4]" in a
+    assert "- Check-ins: not shared with the assistant (permission off)." in a  # permission off: no data
+    assert body["missing"] == ["Blood pressure: no reading today"]
+
+
+def test_arabic_data_question_is_answered_in_arabic(client, monkeypatch, mock_ctx):
+    _no_model(monkeypatch)
+    body = client.post("/api/assistant/ask", json={"question": "شو بتبيّن بياناتي آخر 7 أيام؟"}).json()
+    assert body["mode"] == "data"
+    assert "النوم، آخر 7 أيام: 5 ليالي مسجّلة" in body["answer"]
+    assert "تسجيلات الحالة: مش مشاركة مع المساعد" in body["answer"]
+    assert body["missing"] == ["ضغط الدم: ما في قراءة اليوم"]
+
+
+def test_data_answer_respects_permissions(client, monkeypatch, mock_ctx):
+    _no_model(monkeypatch)
+    set_permissions({"assistant": {"sleep": False, "checkins": True}})
+    body = client.post("/api/assistant/ask", json={"question": "Summarize my data"}).json()
+    a = body["answer"]
+    assert "- Sleep: not shared with the assistant (permission off)." in a and "5 nights" not in a
+    assert "user-data:sleep" not in [s["id"] for s in body["sources"]]
+    assert "Check-ins, last 7 days: 1 check-in(s), 0 skipped; latest mood 3/5, stress 4/5" in a
+    assert "PRIVATE-NOTE" not in a
 
 
 def test_title_heading_counts_as_citation(client, fake_chat, mock_ctx):
     fake_chat.reply = ("Your data: sleep (7 days)\nYou slept about 5 h 20 m on the last nights.\n\n"
                        "**Your data: attention tests (7 days)**\nThe latest test was slower.\nMISSING: none")
-    body = client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"}).json()
-    assert [s["id"] for s in body["sources"]] == ["user-data:sleep", "user-data:attention", "user-data:vitals"]
-    assert "Sleep, last 7 days" not in body["answer"]  # covered: nothing appended
+    body = client.post("/api/assistant/ask", json={"question": "How are my sleep and attention?"}).json()
+    assert [s["id"] for s in body["sources"]] == ["user-data:sleep", "user-data:attention"]
     assert "Your data: sleep (7 days) [1]" in body["answer"]
 
 
@@ -281,7 +361,7 @@ def test_sentences_naming_a_source_get_cited(client, fake_chat, mock_ctx):
     fake_chat.reply = ("The alert Short sleep and slower attention was raised for you. "
                        "Your sleep data shows short nights. Your attention tests were slower. "
                        "Sleep loss is a known spaceflight risk.\nMISSING: none")
-    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
     ids = [s["id"] for s in body["sources"]]
     assert ids[0] == "alert:al-mock-fat01" and "user-data:sleep" in ids and "user-data:attention" in ids
     assert "was raised for you [1]." in body["answer"]
@@ -291,7 +371,7 @@ def test_sentences_naming_a_source_get_cited(client, fake_chat, mock_ctx):
 
 def test_not_shared_data_is_labelled(client, fake_chat, mock_ctx):
     set_permissions({"assistant": {"sleep": False}})
-    client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"})
+    client.post("/api/assistant/ask", json={"question": "How am I sleeping?"})
     _, user = fake_chat.calls[0]
     assert re.search(r"\] Your data: sleep \(7 days\)\nNot shared with the assistant", user)
 
@@ -409,7 +489,7 @@ def test_no_first_token_in_time_falls_back(client, monkeypatch, mock_ctx):
         yield  # pragma: no cover  (makes this a generator)
     monkeypatch.setattr(service.llm, "chat_stream", slow)
     monkeypatch.setattr(service, "retrieve", lambda q, k=None: [REF_HIT])
-    evs = _events(client, "Why did I get the alert?")
+    evs = _events(client, "Is my sleep a problem?")
     assert evs[-1]["answer"]["mode"] == "fallback" and "R-FAT-01" in evs[-1]["answer"]["answer"]
 
 
@@ -418,14 +498,14 @@ def test_stall_after_first_token_keeps_partial_answer(client, fake_chat, mock_ct
     fake_chat.complete = False
     body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
     assert body["mode"] == "llm" and body["answer"].startswith("Your sleep was short")
-    assert any("incomplete" in m for m in body["missing"])
+    assert "incomplete" in body["note"] and body["missing"] == []  # a notice, not missing data
 
 
 def test_cut_off_missing_line_is_not_reported(client, fake_chat, mock_ctx):
     fake_chat.reply = "Sleep loss can slow attention [1].\nMISSING: How can sleep loss be"  # hit the token cap
     fake_chat.complete = False
     body = client.post("/api/assistant/ask", json={"question": "How can sleep loss affect me?"}).json()
-    assert len(body["missing"]) == 1 and "incomplete" in body["missing"][0]
+    assert body["missing"] == [] and "incomplete" in body["note"]
 
 
 def test_real_first_token_timeout_against_a_silent_server(monkeypatch):
@@ -453,7 +533,7 @@ def test_chat_model_is_configurable(monkeypatch):
 # mock data: 5 nights (430, 415, 320, 320, 320 min), 2 tests (281 ms, then 338 ms with 1 lapse),
 # heart rate / SpO2 / resp rate up to date, skin temperature stale, blood pressure missing.
 def test_fixed_facts_are_computed_in_code_and_shown_in_prompt(client, fake_chat, mock_ctx):
-    client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"})
+    client.post("/api/assistant/ask", json={"question": "How am I sleeping?"})
     _, user = fake_chat.calls[0]
     assert ("FIXED FACT: Sleep, last 7 days: 5 nights recorded; average 6 h 01 m; shortest 5 h 20 m; "
             "last night 5 h 20 m; 3 night(s) under 6 h.") in user
@@ -474,7 +554,7 @@ def test_fixed_facts_are_computed_in_code_and_shown_in_prompt(client, fake_chat,
 ])
 def test_contradicting_sentence_is_replaced_by_the_fact(client, fake_chat, mock_ctx, wrong, fact_start):
     fake_chat.reply = f"Here is your summary. {wrong} Keep resting.\nMISSING: none"
-    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
     assert wrong not in body["answer"]
     assert fact_start in body["answer"]
     assert "Here is your summary." in body["answer"] and "Keep resting." in body["answer"]
@@ -492,7 +572,7 @@ def test_contradicting_sentence_is_replaced_by_the_fact(client, fake_chat, mock_
 ])
 def test_correct_or_reference_sentences_are_kept(client, fake_chat, mock_ctx, right):
     fake_chat.reply = f"{right}\nMISSING: none"
-    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
     assert right.rstrip(".") in body["answer"]
 
 
@@ -523,7 +603,7 @@ def test_prime_sends_the_exact_prefix_of_a_real_prompt(client, fake_chat, mock_c
     assert service.prime_cache() is True
     primed = sent["chat"]
     assert primed["options"]["num_predict"] == 1 and primed["keep_alive"] == "60m"
-    client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"})
+    client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"})
     system, user = fake_chat.calls[0]
     assert primed["messages"][0]["content"] == system
     assert user.startswith(primed["messages"][1]["content"])
@@ -551,9 +631,9 @@ def test_echoed_fixed_fact_gets_its_citation_and_loses_the_label(client, fake_ch
 def test_you_have_slept_counts_as_citing_sleep(client, fake_chat, mock_ctx):
     fake_chat.reply = ("Your data shows that you have slept 5 nights, with an average of 6 h 01 m. "
                        "Your latest median reaction time was 338 ms.\nMISSING: none")
-    body = client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"}).json()
-    assert body["answer"].count("Sleep, last 7 days") == 0  # covered by the model's own cited sentence
-    assert {"user-data:sleep", "user-data:attention"} <= {s["id"] for s in body["sources"]}
+    body = client.post("/api/assistant/ask", json={"question": "How am I sleeping?"}).json()
+    assert "user-data:sleep" in {s["id"] for s in body["sources"]}
+    assert "6 h 01 m [1]." in body["answer"]
 
 
 # ---- template fallback fixes ---------------------------------------------------------
@@ -564,15 +644,18 @@ def test_fallback_says_too_slow_vs_not_available(client, monkeypatch, mock_ctx):
         raise llm.FirstTokenTimeout("no first token")
         yield  # pragma: no cover
     monkeypatch.setattr(service.llm, "chat_stream", slow)
-    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
-    assert "taking too long" in body["answer"] and "was too slow" in body["missing"][0]
+    body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
+    assert body["mode"] == "fallback" and "taking too long" in body["note"]
+    # the notice is a note under the badge: never in the answer text or the missing line
+    assert "taking too long" not in body["answer"]
+    assert body["missing"] == ["Blood pressure: no reading since the start of mission day 142"]
 
     def off(*_a, **_k):
         raise llm.OllamaError("connection refused")
         yield  # pragma: no cover
     monkeypatch.setattr(service.llm, "chat_stream", off)
-    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
-    assert "not available" in body["answer"] and "unavailable" in body["missing"][0]
+    body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
+    assert "not available" in body["note"] and not any("template" in m.lower() for m in body["missing"])
 
 
 def test_fallback_picks_highest_level_open_alert():
@@ -592,9 +675,10 @@ def test_fallback_has_no_duplicate_missing_items_or_sources(client):
              "missing": ["BP: no reading", "bp: no reading.", "SpO2 stale"], "possibleFactors": ["f", "f"],
              "nextSteps": [], "sources": ["note A", "note A"], "level": "review", "status": "new"}
     answer, sources, missing = build_fallback(alert, arabic=False)
-    assert missing[1:] == ["BP: no reading", "SpO2 stale"]          # deduped, once
+    assert missing == ["BP: no reading", "SpO2 stale"]              # deduped, once; no template notice
     assert "BP: no reading" not in answer                            # not repeated in the text
-    assert answer.count("[1]") == 1
+    assert answer.count("[1]") == 2                                  # what changed + end of the factor list
+    assert "- f [1]" in answer and answer.count("- f") == 1
     assert [s.title for s in sources] == ["Alert R-T: T", "note A"]  # each source once
 
 
@@ -617,14 +701,14 @@ def test_arabic_plurals():
 ])
 def test_cause_wording_about_user_data_is_softened(client, fake_chat, mock_ctx, wrong, banned):
     fake_chat.reply = f"{wrong}\nMISSING: none"
-    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
     assert banned not in body["answer"].lower()
     assert "a possible link, not a confirmed cause" in body["answer"]
 
 
 def test_arabic_cause_wording_is_softened(client, fake_chat, mock_ctx):
     fake_chat.reply = "نومك قليل بسبب الضجة.\nMISSING: none"
-    body = client.post("/api/assistant/ask", json={"question": "ليش طلعلي التنبيه؟"}).json()
+    body = client.post("/api/assistant/ask", json={"question": "ليش نومي قليل؟"}).json()
     assert "بسبب" not in body["answer"] and "ارتباط محتمل، مش سبب مؤكد" in body["answer"]
 
 
@@ -690,7 +774,7 @@ def test_citation_check_runs_in_the_ask_flow(client, fake_chat, mock_ctx, monkey
 
 
 # ---- token caps ------------------------------------------------------------------------
-def test_summary_questions_get_180_tokens_others_200(client, mock_ctx, monkeypatch):
+def test_arabic_questions_get_150_tokens_others_200(client, mock_ctx, monkeypatch):
     seen = []
 
     def capture(system, user, **kw):
@@ -698,9 +782,10 @@ def test_summary_questions_get_180_tokens_others_200(client, mock_ctx, monkeypat
         yield llm.ChatResult(text="ok [1].\nMISSING: none")
     monkeypatch.setattr(service.llm, "chat_stream", capture)
     monkeypatch.setattr(service, "retrieve", lambda q, k=None: [REF_HIT])
-    client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"})
-    client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"})
-    assert seen == [180, 200]
+    client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"})  # no model
+    client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"})
+    client.post("/api/assistant/ask", json={"question": "ليش نومي قليل؟"})
+    assert seen == [200, 150]
 
 
 def test_dropped_citation_takes_its_joining_word_with_it():
@@ -717,19 +802,116 @@ def test_echoed_raw_data_line_is_removed(client, fake_chat, mock_ctx):
     assert "DATA:" not in body["answer"] and "durationsMin" not in body["answer"]
 
 
-def test_summary_adds_vitals_and_drops_false_missing_area(client, fake_chat, mock_ctx):
+def test_false_missing_area_is_dropped(client, fake_chat, mock_ctx):
     fake_chat.reply = lambda user: (
-        f"You slept 6 h 01 m on average [{_num(user, 'Your data: sleep')}]. "
-        f"Your latest median reaction time was 338 ms [{_num(user, 'Your data: attention')}].\n"
+        f"You slept 6 h 01 m on average [{_num(user, 'Your data: sleep')}].\n"
         "MISSING: your vital signs data for the last 7 days; blood pressure reading today")
-    body = client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"}).json()
-    assert "Vital signs: up to date: heart rate" in body["answer"]
+    body = client.post("/api/assistant/ask", json={"question": "How am I sleeping?"}).json()
     assert body["missing"] == ["blood pressure reading today"]  # the false "vital signs missing" is gone
+
+
+# ---- empty answer ------------------------------------------------------------------------
+@pytest.mark.parametrize("reply", ["MISSING: temperature on Mars", "[1].\n\nPossible link:\nMISSING: none"])
+def test_empty_answer_says_not_found(client, fake_chat, mock_ctx, reply):
+    fake_chat.reply = reply
+    body = client.post("/api/assistant/ask", json={"question": "What is the temperature on Mars?"}).json()
+    assert body["mode"] == "llm"
+    assert body["answer"] == "This isn't in the on-board references or your data."
+    assert body["missing"] == ["the temperature on Mars"] and body["sources"] == []
+
+
+def test_empty_arabic_answer_says_not_found_in_arabic(client, fake_chat, mock_ctx):
+    fake_chat.reply = "MISSING: none"
+    body = client.post("/api/assistant/ask", json={"question": "شو درجة الحرارة على المريخ؟"}).json()
+    assert body["answer"] == "هاي المعلومة مش موجودة بالمراجع اللي على المركبة ولا ببياناتك."
+    assert body["missing"] == ["درجة الحرارة على المريخ"]
+
+
+# ---- "possible possible" ---------------------------------------------------------------
+@pytest.mark.parametrize("wrong", [
+    "These are mentioned as possible causes for your alert.",
+    "The possible cause of your alert is cabin noise.",
+    "Your alert has possible underlying causes.",
+    "Your short nights are possible possible factors.",
+])
+def test_cause_wording_never_doubles_possible(wrong):
+    from server.features.assistant.wording import soften_causes
+    out = soften_causes(wrong, set(), arabic=False)
+    assert "possible possible" not in out.lower() and "a a " not in out.lower()
+    assert "cause of" not in out and "causes for" not in out
+
+
+def test_arabic_cause_wording_never_doubles():
+    from server.features.assistant.wording import soften_causes
+    out = soften_causes("الأسباب المحتملة لتنبيهك هي الضجة.", set(), arabic=True)
+    assert "المحتملة المحتملة" not in out and "العوامل المحتملة لتنبيهك" in out
+
+
+# ---- citations ---------------------------------------------------------------------------
+def test_repeated_list_citations_are_cited_once_at_the_end():
+    from server.features.assistant.prompt import merge_list_citations, split_citations
+    text = "Possible factors:\n- Short nights [1, 2]\n- Noise [1, 2].\n- Schedule [1, 2]\n\nRest [3]."
+    assert split_citations(merge_list_citations(text)) == (
+        "Possible factors:\n- Short nights\n- Noise.\n- Schedule [1][2]\n\nRest [3].")
+    # different citations per bullet stay where they are
+    assert merge_list_citations("- A [1]\n- B [2]") == "- A [1]\n- B [2]"
+
+
+def test_answer_citations_are_rendered_one_per_bracket(client, fake_chat, mock_ctx):
+    fake_chat.reply = lambda user: (
+        f"- Short sleep [{_num(user, 'Your data: sleep')}, {_num(user, 'Sleep risk')}]\n"
+        f"- Fatigue risk [{_num(user, 'Your data: sleep')}, {_num(user, 'Sleep risk')}]\nMISSING: none")
+    body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
+    assert "- Short sleep\n- Fatigue risk [1][2]" in body["answer"]
+    assert ", " not in re.sub(r"[^\[\],\d ]", "", body["answer"])  # no "[1, 2]" left
+
+
+# ---- missing line: only real missing data -----------------------------------------------
+def test_missing_line_drops_notices_and_next_steps(client, fake_chat, mock_ctx):
+    fake_chat.reply = ("Your sleep was short [2].\nMISSING: Protect an 8-hour sleep opportunity tonight; "
+                       "template answer; next steps from the alert; blood pressure reading today")
+    body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
+    assert body["missing"] == ["blood pressure reading today"]
+
+
+# ---- "the astronaut" -> "you" ----------------------------------------------------------------
+def test_the_astronaut_becomes_you(client, fake_chat, mock_ctx):
+    fake_chat.reply = ("The astronaut's sleep was short [2]. The astronaut is tired, and the astronaut has "
+                       "3 short nights.\nMISSING: none")
+    body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
+    a = body["answer"]
+    assert "astronaut" not in a.lower()
+    assert a.startswith("Your sleep was short") and "You are tired, and you have 3 short nights" in a
+
+
+def test_system_prompt_says_address_the_user_as_you():
+    from server.features.assistant.prompt import SYSTEM_PROMPT
+    assert 'Never write "the astronaut"' in SYSTEM_PROMPT
+
+
+# ---- sleep self-contradiction ------------------------------------------------------------
+@pytest.mark.parametrize("wrong", [
+    "Your sleep data shows no irregularities.",
+    "There were no irregularities.",
+    "You had no short nights this week.",
+    "Your sleep was regular.",
+])
+def test_no_irregularities_is_replaced_when_nights_were_short(client, fake_chat, mock_ctx, wrong):
+    fake_chat.reply = f"{wrong} Keep resting.\nMISSING: none"  # mock: 3 nights under 6 h
+    body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
+    assert wrong.rstrip(".") not in body["answer"]
+    assert "3 night(s) under 6 h" in body["answer"] and "Keep resting." in body["answer"]
+
+
+def test_general_no_sleep_problems_sentence_is_kept(client, fake_chat, mock_ctx):
+    fake_chat.reply = "Most astronauts report no sleep problems in the first week.\nMISSING: none"
+    body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
+    assert "Most astronauts report no sleep problems" in body["answer"]
 
 
 def test_no_recent_data_is_not_read_as_fresh(client, fake_chat, mock_ctx):
     fake_chat.reply = "Your skin temperature has no recent data.\nMISSING: none"  # mock: skin temp is stale
-    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
     assert "Your skin temperature has no recent data" in body["answer"]
     assert "Vital signs: up to date" not in body["answer"]
 
@@ -737,7 +919,7 @@ def test_no_recent_data_is_not_read_as_fresh(client, fake_chat, mock_ctx):
 def test_sentence_quoting_alert_factors_cites_the_alert(client, fake_chat, mock_ctx):
     fake_chat.reply = ("The possible factors listed include several short nights in a row and a shifted work "
                        "schedule.\nMISSING: none")
-    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
     assert [s["id"] for s in body["sources"]] == ["alert:al-mock-fat01"]
     assert body["answer"].endswith("schedule [1].")
 
@@ -746,7 +928,7 @@ def test_sentence_quoting_alert_factors_cites_the_alert(client, fake_chat, mock_
 def test_label_only_lines_are_removed(client, fake_chat, mock_ctx):
     fake_chat.reply = ("Sleep loss can lead to fatigue [1].\n\nPossible link:\n\n**NOT A CONFIRMED CAUSE:**\n\n"
                        "الخلاصة:\n\nNext steps:\n- Rest well tonight\nMISSING: none")
-    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
     a = body["answer"]
     assert "Possible link:" not in a and "NOT A CONFIRMED CAUSE" not in a and "الخلاصة" not in a
     assert "Next steps:\n- Rest well tonight" in a  # a label that heads a list stays
@@ -755,7 +937,7 @@ def test_label_only_lines_are_removed(client, fake_chat, mock_ctx):
 
 def test_label_with_text_after_it_is_kept(client, fake_chat, mock_ctx):
     fake_chat.reply = "Possible link: short sleep and slower attention.\nMISSING: none"
-    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
     assert body["answer"].startswith("Possible link: short sleep and slower attention")
 
 

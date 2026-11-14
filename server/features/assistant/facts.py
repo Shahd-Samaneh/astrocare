@@ -148,7 +148,30 @@ _WORDNUM = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "sev
 _NEGATED = re.compile(r"\b(not|isn't|aren't|wasn't|no longer)\b|مش|ليس", re.I)
 
 
+# "no short nights" / "no irregularities" / "your sleep was regular": wrong when nights under the threshold > 0
+_NO_SHORT_NIGHTS = re.compile(
+    r"\bno (?:short|shorter|bad|poor) nights?\b|\bno nights? (?:under|below|shorter than|less than)\b"
+    r"|\bnone of (?:the|your) nights\b|\bno (?:sleep )?(?:irregularit\w*|abnormalit\w*|anomal\w*|issues|problems|concerns)\b"
+    r"|\bwithout (?:any )?(?:irregularit\w*|short nights?)\b|\b(?:sleep|nights?) (?:was|were|is|are|looks?|seems?) "
+    r"(?:regular|normal|consistent|fine|good|healthy|adequate|sufficient)\b"
+    r"|ما في ليالي? قصيرة|لا توجد ليال[ٍي]? قصيرة|بدون ليالي? قصيرة|ما في (?:أي )?(?:مشاكل|مشكلة|اضطراب)|لا يوجد (?:أي )?(?:اضطراب|مشاكل)|نومك منتظم",
+    re.I,
+)
+# reference-style sentences about people in general ("most astronauts report no sleep problems")
+_GENERAL = re.compile(r"astronauts|crews|crew members|people|studies|research|NASA|CSA|in general|رواد|الدراسات", re.I)
+_OTHER_AREA = re.compile(r"attention|reaction|lapses?|heart|spo|skin|blood pressure|respirat|exercis|check-?in|انتباه|نبض|تمرين", re.I)
+
+
+def says_no_short_nights(sent: str) -> bool:
+    """A "no irregularities"-style claim about sleep (a sentence about another area does not count)."""
+    if not _NO_SHORT_NIGHTS.search(sent):
+        return False
+    return bool(_SLEEP.search(sent)) or not _OTHER_AREA.search(sent)
+
+
 def _contradicts_sleep(sent: str, f: Fact) -> bool:
+    if (f.data.get("nightsUnder") or 0) > 0 and says_no_short_nights(sent):
+        return True
     if not _SLEEP.search(sent):
         return False
     if _STALE_WORDS.search(sent):  # sleep sessions are not readings: never "stale"
@@ -219,5 +242,10 @@ SENTENCE = re.compile(r"(?:[^.!?؟\n]|(?<=\d)\.(?=\d))+[.!?؟]?")
 
 def contradicted_facts(sentence: str, facts: dict[str, Fact]) -> list[Fact]:
     if not _ABOUT_USER.search(sentence):
+        # "There were no irregularities." names no area: it still claims the user's sleep was fine
+        sleep = facts.get("sleep")
+        if (sleep and (sleep.data.get("nightsUnder") or 0) > 0 and says_no_short_nights(sentence)
+                and not _GENERAL.search(sentence)):
+            return [sleep]
         return []
     return [f for k, f in facts.items() if _CHECKS[k](sentence, f)]

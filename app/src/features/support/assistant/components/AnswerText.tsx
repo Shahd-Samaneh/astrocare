@@ -8,11 +8,16 @@ function inline(text: string, key: string): ReactNode[] {
   return parts.map((p, i) => {
     if (/^\*\*[^*]+\*\*$/.test(p)) return <strong key={`${key}-${i}`}>{p.slice(2, -2)}</strong>;
     if (/^\[\d+(?:,\s*\d+)*\]$/.test(p)) {
-      return (
-        <sup key={`${key}-${i}`} className={styles.cite} aria-label={`source ${p.slice(1, -1)}`}>
-          {p}
-        </sup>
-      );
+      // "[1, 2]" is shown as "[1][2]"
+      return p
+        .slice(1, -1)
+        .split(',')
+        .map((n) => n.trim())
+        .map((n) => (
+          <sup key={`${key}-${i}-${n}`} className={styles.cite} aria-label={`source ${n}`}>
+            [{n}]
+          </sup>
+        ));
     }
     return p;
   });

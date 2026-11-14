@@ -205,12 +205,17 @@ function AnswerView({
   return (
     <div className={styles.answerWrap}>
       <div className={styles.meta}>
-        <ModeBadge mode={answer.mode} refused={answer.refused} />
+        <ModeBadge mode={answer.mode} refused={answer.refused} alertRuleId={answer.alertRuleId} />
         <span className={styles.latency}>
           {firstTokenMs != null && answer.mode === 'llm' && `first words ${(firstTokenMs / 1000).toFixed(1)} s · `}
           {(answer.latencyMs / 1000).toFixed(1)} s total
         </span>
       </div>
+      {answer.note && (
+        <p className={styles.note} dir="auto">
+          {answer.note}
+        </p>
+      )}
 
       {answer.refused ? (
         <div className={styles.refusal} role="note">
