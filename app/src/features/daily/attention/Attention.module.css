@@ -614,3 +614,12 @@
   color: var(--warn);
   font-weight: 700;
 }
+
+.added {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--tap-min);
+  font-weight: 600;
+  color: var(--ok);
+}

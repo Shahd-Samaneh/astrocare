@@ -22,6 +22,7 @@ import {
 } from '../api.attention';
 import { HistoryChart } from '../attention/HistoryChart';
 import { EXPERIMENTAL_NOTE, ResultPanel } from '../attention/ResultPanel';
+import { AddToReport } from '../attention/AddToReport';
 import { RetestCompare } from '../attention/RetestCompare';
 import { SleepRtChart } from '../attention/SleepRtChart';
 import { SleepinessQuestion } from '../attention/SleepinessQuestion';
@@ -171,6 +172,7 @@ export default function AttentionCheck() {
                     Back to the alert
                   </Button>
                 )}
+                <AddToReport result={result} />
                 <Button variant="secondary" onClick={backToIntro} icon={<Play size={16} />}>
                   Test again
                 </Button>
