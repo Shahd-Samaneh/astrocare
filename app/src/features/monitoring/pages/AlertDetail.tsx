@@ -1,21 +1,306 @@
-// Alert detail (placeholder). /alerts lists alerts, /alerts/:id shows one.
-import { useParams } from 'react-router-dom';
-import { PlaceholderPage } from '../../../shared/components';
-import { OWNERS } from '../owners';
+/** AstroCare monitoring alerts — local-only frontend.
+ * The backend owns alert generation, resource decisions, and persistence.
+ * This view never invents a medical cause or authorizes medication.
+ */
+import { useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import {
+  Activity, AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, ClipboardCopy,
+  ClipboardList, Clock3, FileText, LockKeyhole, PackageCheck, RefreshCw,
+  ShieldAlert, ShieldCheck, Stethoscope, TriangleAlert,
+} from 'lucide-react';
+import { api, useApi } from '../../../shared/api/client';
+import type { Alert, AlertLevel, Availability, NextStep, Resource } from '../../../shared/types/contracts';
+import styles from './AlertDetail.module.css';
+
+type Filter = 'all' | 'new' | 'ack';
+type ResourceCheck = { status: Availability | 'unknown'; label: string; detail: string; lowStock: boolean };
+
+const LEVEL_NAME: Record<AlertLevel, string> = {
+  info: 'Information',
+  review: 'Review needed',
+  urgent: 'Urgent review',
+};
+
+function dateTime(iso: string): string {
+  const value = new Date(iso);
+  return Number.isNaN(value.getTime()) ? iso : value.toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+/** The alert API is authoritative for resource availability. Inventory is optional display data. */
+function assessResource(step: NextStep, resource: Resource | undefined): ResourceCheck {
+  if (!step.resourceId) {
+    return { status: 'unknown', label: 'No resource linked', detail: 'This step does not reference an inventory item.', lowStock: false };
+  }
+
+  const name = resource?.name ?? `Resource ${step.resourceId}`;
+  const status = step.availability ?? 'unknown';
+  const lowStock = status === 'available' && resource?.status === 'low';
+
+  switch (status) {
+    case 'available':
+      return {
+        status,
+        label: lowStock ? 'Available · low stock' : 'Available',
+        detail: `${name} — available according to this alert's backend resource check. Availability is not authorization to use it.`,
+        lowStock,
+      };
+    case 'out_of_stock':
+      return { status, label: 'Out of stock', detail: `${name} — the backend reports no available stock for this step.`, lowStock: false };
+    case 'expired':
+      return { status, label: 'Expired', detail: `${name} — the backend reports an expired resource.`, lowStock: false };
+    case 'allergy_conflict':
+      return { status, label: 'Allergy conflict', detail: `${name} — the backend identified a potential allergy conflict. Do not assume this is safe to use.`, lowStock: false };
+    default:
+      return {
+        status: 'unknown',
+        label: 'Availability not provided',
+        detail: `${name} — the alert has no resource availability result. Do not assume it is available.`,
+        lowStock: false,
+      };
+  }
+}
+
+function AlertLabel({ level }: { level: AlertLevel }) {
+  return <span className={`${styles.level} ${styles[level]}`}>{level === 'info' ? <ShieldCheck size={14} /> : <TriangleAlert size={14} />}{LEVEL_NAME[level]}</span>;
+}
+
+function AlertList() {
+  const { data: alerts, loading, error, reload } = useApi<Alert[]>('/alerts');
+  const [filter, setFilter] = useState<Filter>('all');
+  const filtered = (alerts ?? []).filter((a) => filter === 'all' || a.status === filter);
+  const newCount = alerts?.filter((a) => a.status === 'new').length ?? 0;
+  const ackCount = alerts?.filter((a) => a.status === 'ack').length ?? 0;
+
+  return (
+    <main className={styles.page}>
+      <header className={styles.header}>
+        <div>
+          <Link className={styles.backLink} to="/"><ArrowLeft size={16} /> Today dashboard</Link>
+          <p className={styles.eyebrow}>HEALTH MONITORING · LOCAL ALERTS</p>
+          <h1>Alerts</h1>
+          <p className={styles.description}>Review monitoring signals with the underlying evidence, limitations, and next steps.</p>
+        </div>
+        <button className={styles.secondaryButton} type="button" onClick={reload}><RefreshCw size={16} /> Refresh alerts</button>
+      </header>
+
+      <div className={styles.stats}>
+        <div className={styles.stat}><span>All recorded</span><strong>{alerts?.length ?? '—'}</strong></div>
+        <div className={styles.stat}><span>Awaiting review</span><strong>{alerts ? newCount : '—'}</strong></div>
+        <div className={styles.stat}><span>Acknowledged</span><strong>{alerts ? ackCount : '—'}</strong></div>
+      </div>
+
+      <section className={styles.panel} aria-labelledby="alert-list-title">
+        <div className={styles.panelHeading}>
+          <div><h2 id="alert-list-title">Alert history</h2><p>Generated by the local monitoring rules</p></div>
+          <div className={styles.filters} aria-label="Filter alerts">
+            {(['all', 'new', 'ack'] as const).map((value) => (
+              <button type="button" key={value} aria-pressed={filter === value}
+                className={`${styles.filterButton} ${filter === value ? styles.filterActive : ''}`}
+                onClick={() => setFilter(value)}>{value === 'all' ? 'All' : value === 'new' ? 'New' : 'Acknowledged'}</button>
+            ))}
+          </div>
+        </div>
+        {loading && !alerts ? <p className={styles.notice} role="status">Loading local alerts…</p> : error ? (
+          <div className={styles.error} role="alert">Could not load alerts: {error.message} <button type="button" onClick={reload}>Retry</button></div>
+        ) : filtered.length === 0 ? (
+          <p className={styles.notice}>No alerts in this category.</p>
+        ) : (
+          <div className={styles.alertList}>
+            {filtered.map((alert) => (
+              <Link key={alert.id} className={styles.alertRow} to={`/alerts/${encodeURIComponent(alert.id)}`}>
+                <span className={styles.alertIcon}><AlertTriangle size={21} /></span>
+                <span className={styles.alertRowBody}>
+                  <span className={styles.rowMeta}><AlertLabel level={alert.level} /> <span className={styles.status}>{alert.status.toUpperCase()}</span> <span>{dateTime(alert.ts)}</span></span>
+                  <strong>{alert.title}</strong>
+                  <small>{alert.ruleId} · {alert.whatChanged}</small>
+                </span>
+                <ArrowRight className={styles.rowArrow} size={19} />
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+      <p className={styles.disclaimer}>SIMULATED / local monitoring data. Alerts support review; they do not provide a diagnosis.</p>
+    </main>
+  );
+}
+
+function AlertView({ id }: { id: string }) {
+  const path = `/alerts/${encodeURIComponent(id)}`;
+  const detail = useApi<Alert>(path);
+  const inventory = useApi<Resource[]>('/resources');
+  const [updated, setUpdated] = useState<Alert | null>(null);
+  const [ackBusy, setAckBusy] = useState(false);
+  const [ackError, setAckError] = useState<string | null>(null);
+  const [copyResult, setCopyResult] = useState<string | null>(null);
+
+  const alert = (updated?.id === id ? updated : detail.data?.id === id ? detail.data : undefined);
+
+  async function acknowledge() {
+    if (!alert || ackBusy || alert.status === 'ack' || alert.status === 'closed') return;
+    setAckError(null);
+    setAckBusy(true);
+    try {
+      const result = await api.post<Alert>(`/alerts/${encodeURIComponent(id)}/ack`, { actor: 'crew' });
+      setUpdated(result);
+      detail.reload();
+    } catch (error) {
+      setAckError(error instanceof Error ? error.message : 'Unable to acknowledge alert.');
+    } finally {
+      setAckBusy(false);
+    }
+  }
+
+  async function copySummary() {
+    if (!alert) return;
+    setCopyResult(null);
+    const lines = [
+      `AstroCare alert: ${alert.title}`, `Rule: ${alert.ruleId}`, `Level: ${alert.level}`,
+      `Recorded: ${dateTime(alert.ts)}`, `Status: ${alert.status}`,
+      '', 'What changed:', alert.whatChanged,
+      '', 'Data used:', ...(alert.dataUsed.length ? alert.dataUsed : ['Not listed']),
+      '', 'Missing or unreliable:', ...(alert.missing.length ? alert.missing : ['None listed']),
+      '', 'Possible factors (not confirmed causes):', ...(alert.possibleFactors.length ? alert.possibleFactors : ['None listed']),
+      '', 'Next steps:', ...(alert.nextSteps.length ? alert.nextSteps.map((s) => `- ${s.text}${s.resourceId ? ` [resource: ${s.resourceId}; availability: ${s.availability ?? 'not provided'}]` : ''}${s.lockedForCMO ? ' [CMO review required]' : ''}`) : ['None listed']),
+      '', 'Sources:', ...(alert.sources.length ? alert.sources : ['None listed']),
+      '', 'Review aid only — not a diagnosis or treatment authorization.',
+    ];
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard access is unavailable.');
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopyResult('Summary copied. Open Reports to paste it into a report.');
+    } catch (error) {
+      setCopyResult(error instanceof Error ? `Copy failed: ${error.message}` : 'Copy failed.');
+    }
+  }
+
+  return (
+    <main className={styles.page}>
+      <header className={styles.header}>
+        <div>
+          <Link to="/alerts" className={styles.backLink}><ArrowLeft size={16} /> All alerts</Link>
+          <p className={styles.eyebrow}>MONITORING · ALERT DETAILS</p>
+          <h1>Alert detail</h1>
+          <p className={styles.description}>Evidence, possible contributing factors, and review-safe next steps.</p>
+        </div>
+        <Link to="/vitals" className={styles.secondaryButton}><Activity size={16} /> View vitals</Link>
+      </header>
+
+      {detail.loading && !alert ? <p className={styles.notice} role="status">Loading alert details…</p> : detail.error ? (
+        <div role="alert" className={styles.error}>Could not load alert: {detail.error.message} <button type="button" onClick={detail.reload}>Retry</button></div>
+      ) : !alert ? (
+        <p className={styles.notice}>Alert data not available for this ID.</p>
+      ) : (
+        <>
+          <section className={`${styles.hero} ${styles[`hero_${alert.level}`]}`} aria-labelledby="alert-title">
+            <span className={styles.heroIcon}><TriangleAlert size={27} /></span>
+            <div className={styles.heroBody}>
+              <div className={styles.heroMeta}><AlertLabel level={alert.level} /><span className={styles.status}>{alert.status.toUpperCase()}</span></div>
+              <h2 id="alert-title">{alert.title}</h2>
+              <div className={styles.heroFacts}>
+                <span><ClipboardList size={15} /> Rule {alert.ruleId}</span>
+                <span><Clock3 size={15} /> {dateTime(alert.ts)}</span>
+                <span><ShieldAlert size={15} /> Local decision support</span>
+              </div>
+              <p className={styles.heroNote}>A possible signal for review, not a confirmed cause or medical diagnosis.</p>
+            </div>
+          </section>
+
+          <div className={styles.actions}>
+            <button className={styles.primaryButton} type="button" onClick={acknowledge}
+              disabled={ackBusy || alert.status === 'ack' || alert.status === 'closed'}>
+              <CheckCircle2 size={17} /> {ackBusy ? 'Acknowledging…' : alert.status === 'ack' ? 'Acknowledged' : alert.status === 'closed' ? 'Alert closed' : 'Acknowledge alert'}
+            </button>
+            <button className={styles.secondaryButton} type="button" onClick={copySummary}><ClipboardCopy size={16} /> Copy summary for report</button>
+            <Link className={styles.secondaryButton} to="/reports"><FileText size={16} /> Open reports</Link>
+          </div>
+          {ackError && <p className={styles.error} role="alert">Could not acknowledge alert: {ackError}</p>}
+          {copyResult && <p className={styles.feedback} role="status">{copyResult}</p>}
+          {alert.status === 'ack' && <p className={styles.acknowledged} role="status"><CheckCircle2 size={16} /> This alert is acknowledged in the local record.</p>}
+
+          <section className={styles.sections} aria-label="Alert explanation">
+            <article className={styles.panel}>
+              <h3><span className={styles.number}>01</span> What changed</h3>
+              <p className={styles.contentText}>{alert.whatChanged}</p>
+              <p className={styles.helper}>Describes the observed change; no diagnosis is inferred.</p>
+            </article>
+
+            <article className={styles.panel}>
+              <div className={styles.sectionTop}><h3><span className={styles.number}>02</span> Data used</h3><Link to="/vitals" className={styles.textLink}>Open vitals trends <ArrowRight size={15} /></Link></div>
+              {alert.dataUsed.length ? (
+                <ul className={styles.idList}>
+                  {alert.dataUsed.map((readingId) => <li key={readingId}><span className={styles.smallIcon}><Activity size={16} /></span><code>{readingId}</code><span>Reading ID used by the rule</span></li>)}
+                </ul>
+              ) : <p className={styles.empty}>No reading identifiers were included in this alert.</p>}
+              <p className={styles.helper}>The IDs above come from the alert record. The Vitals link shows trends, not a direct jump to a reading.</p>
+            </article>
+
+            <article className={styles.panel}>
+              <h3><span className={styles.number}>03</span> Missing or unreliable</h3>
+              {alert.missing.length ? (
+                <ul className={styles.simpleList}>{alert.missing.map((entry, i) => <li key={`${entry}-${i}`}><AlertTriangle size={16} /> {entry}</li>)}</ul>
+              ) : <p className={styles.empty}>No missing or unreliable items listed by the alert.</p>}
+              <p className={styles.helper}>Missing and low-quality data must not be treated as normal measurements.</p>
+            </article>
+
+            <article className={styles.panel}>
+              <h3><span className={styles.number}>04</span> Possible factors</h3>
+              {alert.possibleFactors.length ? (
+                <ul className={styles.simpleList}>{alert.possibleFactors.map((factor, i) => <li key={`${factor}-${i}`}><Stethoscope size={16} /> {factor}</li>)}</ul>
+              ) : <p className={styles.empty}>No possible factors were listed.</p>}
+              <div className={styles.caution}><ShieldAlert size={17} /> These are possibilities to consider, not proven explanations.</div>
+            </article>
+
+            <article className={`${styles.panel} ${styles.wide}`}>
+              <div className={styles.sectionTop}><h3><span className={styles.number}>05</span> Next steps & resource checks</h3><Link className={styles.textLink} to="/resources">Resource inventory <ArrowRight size={15} /></Link></div>
+              {alert.nextSteps.length ? (
+                <ol className={styles.stepList}>
+                  {alert.nextSteps.map((step, i) => {
+                    const resource = step.resourceId ? inventory.data?.find((item) => item.id === step.resourceId) : undefined;
+                    const check = assessResource(step, resource);
+                    const locked = step.lockedForCMO || resource?.kind === 'medicine';
+                    return (
+                      <li className={styles.step} key={`${i}-${step.text}`}>
+                        <span className={styles.stepIndex}>{i + 1}</span>
+                        <div className={styles.stepMain}>
+                          <p>{step.text}</p>
+                          {step.resourceId && <div className={styles.resourceStatus}>
+                            <span className={`${styles.resourceTag} ${styles[`resource_${check.status}`]}`}>
+                              <PackageCheck size={14} /> {check.label}
+                            </span>
+                            <small>{check.detail}</small>
+                            {check.lowStock && <small>Inventory reports limited stock.</small>}
+                          </div>}
+                          {locked && <p className={styles.cmo}><LockKeyhole size={16} /> CMO review required — medication step is locked. No approval or administration is available here.</p>}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : <p className={styles.empty}>No next steps have been defined by this rule.</p>}
+              {inventory.error && <p className={styles.helper}>Resource names could not be loaded. Availability labels above still come from the alert backend.</p>}
+              <p className={styles.helper}>Stock availability is not a clinical recommendation. Follow mission medical procedures and CMO review requirements.</p>
+            </article>
+          </section>
+
+          <section className={styles.panel} aria-labelledby="sources-title">
+            <h3 id="sources-title"><FileText size={18} /> Sources & references</h3>
+            {alert.sources.length ? (
+              <ul className={styles.sourceList}>{alert.sources.map((source, i) => <li key={`${source}-${i}`}>{source}</li>)}</ul>
+            ) : <p className={styles.empty}>No source references attached to this alert.</p>}
+            <p className={styles.helper}>Reference labels are displayed from the locally stored alert; external network access is not required.</p>
+          </section>
+          <p className={styles.disclaimer}>SIMULATED / local data · AstroCare provides decision support, not medical diagnosis or treatment authorization.</p>
+        </>
+      )}
+    </main>
+  );
+}
 
 export default function AlertDetail() {
-  const { id } = useParams();
-  return (
-    <PlaceholderPage
-      title={id ? 'Alert detail' : 'Alerts'}
-      owners={OWNERS}
-      endpoint={id ? `/alerts/${encodeURIComponent(id)}` : '/alerts'}
-      plan={[
-        'The five sections: what changed, data used, missing or unreliable, possible factors, next steps',
-        'Next steps with resource checks (available / out of stock / expired / allergy conflict) and CMO lock',
-        'Acknowledge (POST /api/alerts/{id}/ack)',
-        'Sources',
-      ]}
-    />
-  );
+  const { id } = useParams<{ id: string }>();
+  return id ? <AlertView key={id} id={id} /> : <AlertList />;
 }
