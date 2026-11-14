@@ -173,3 +173,20 @@ POST /api/comms/simulate-window   -> { windowId, openedTs, sentReportIds[] }   /
 ```
 Python: `from server.features.reports.service import get_comms_status` (same shape, snake_case). Haya can call it from `core/status` if useful.
 Table: `comms_windows` (created in my `service.py`).
+
+
+### N5. Reports API (contracts §2)
+
+**Live now:**
+```
+GET  /api/reports?status=                 -> ReportOut[]   (Report + sentTs)
+POST /api/reports { sections: SectionId[], itemIds?: string[] } -> 201 ReportOut (status 'ready')
+GET  /api/reports/{id}/file?format=pdf|json
+POST /api/reports/{id}/queue              -> ready -> queued (409 if not ready, 404 if unknown)
+```
+- `POST /api/reports` now takes **section ids** (contracts §2), not full `ReportSection` objects. The server builds each section's body.
+- `SectionId = 'summary'|'alerts'|'vitals'|'cabin'|'sleep'|'attention'|'exercise'|'checkins'|'relax'|'items'|'radiation'`
+- Files: `data/reports/{id}.pdf` + `.json` (ReportLab, built-in fonts, no network). Every report has the SIMULATED line + NASA/CSA sources.
+- `checkins` only if `get_permissions()["report"]["checkins"]` (Marah's); otherwise "Not included: permission required". `notePrivate` is never copied.
+- Proposal: add `sentTs?: string | null` to `Report` (from the `comms_windows` log).
+- ⚠️ `server/tests/test_health.py::test_posts_accept_camel_case`: one line updated to the new body (`{"sections": ["summary"], "itemIds": []}` → `ready`). Haya, please check.
