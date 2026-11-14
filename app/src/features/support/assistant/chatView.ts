@@ -46,6 +46,18 @@ export const HEALTH_NOTE = {
   ar: 'هذا نمط للمراجعة، وليس تشخيصاً.',
 } as const;
 
+/** Empty chat (before the first message): what the assistant does and what it never does. */
+export const EMPTY_STATE = {
+  en: [
+    'I can explain your alerts, summarise your last 7 days, and answer from NASA/CSA references on this device.',
+    'I never give medication, dose or diagnosis advice. Those questions go to the CMO.',
+  ],
+  ar: [
+    'أستطيع شرح تنبيهاتك، وتلخيص آخر 7 أيام، والإجابة من مراجع NASA/CSA المحفوظة على هذا الجهاز.',
+    'لا أقدّم أبداً نصائح عن الأدوية أو الجرعات أو التشخيص. هذه الأسئلة تُحال إلى الضابط الطبي للطاقم (CMO).',
+  ],
+} as const;
+
 export type ModelStatus = 'ready' | 'loading' | 'off';
 
 /** The pill in the chat header. Off: the service or Ollama is not reachable (answers come from

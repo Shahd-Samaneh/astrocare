@@ -2,7 +2,7 @@
 // Run: node --experimental-strip-types --test "app/src/features/support/assistant/tests/*.test.mjs"
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { chipLabel, HEALTH_NOTE, isArabic, isReference, modelStatus, showsHealthNote, sourceLink } from '../chatView.ts';
+import { chipLabel, EMPTY_STATE, HEALTH_NOTE, isArabic, isReference, modelStatus, showsHealthNote, sourceLink } from '../chatView.ts';
 
 test('alert chip: rule id first, without the "Alert" / "التنبيه" word (EN and AR answers)', () => {
   const title = 'Heart rate, no recent data';
@@ -70,4 +70,15 @@ test('model status pill', () => {
   assert.equal(modelStatus({ reachable: false, warming: false, failed: false }), 'off');
   assert.equal(modelStatus({ reachable: undefined, warming: false, failed: true }), 'off');
   assert.equal(modelStatus({ reachable: undefined, warming: false, failed: false }), 'loading');
+});
+
+test('empty state: same two lines in EN and AR, the second one sends medication / dose / diagnosis to the CMO', () => {
+  assert.equal(EMPTY_STATE.en.length, 2);
+  assert.equal(EMPTY_STATE.ar.length, 2);
+  assert.match(EMPTY_STATE.en[1], /medication, dose or diagnosis/);
+  assert.match(EMPTY_STATE.en[1], /CMO/);
+  assert.match(EMPTY_STATE.ar[1], /CMO/);
+  assert.match(EMPTY_STATE.en[0], /NASA\/CSA/);
+  assert.match(EMPTY_STATE.ar[0], /NASA\/CSA/);
+  assert.ok(EMPTY_STATE.ar.every((l) => isArabic(l)));
 });
