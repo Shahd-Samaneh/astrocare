@@ -64,3 +64,65 @@ def test_simulate_window_sends_queued(client):
     assert after["queuedCount"] == 0
     assert after["connected"] is True and after["simulatedWindow"] is True
     assert client.get("/api/status").json()["outboxCount"] == 0
+
+    
+
+# ---- reports ---------------------------------------------------------------------
+def test_report_includes_pending_items_then_sets_report_id(client):
+    item = _add(client, kind="cmo_question", title="Medication question for CMO", sourceFeature="assistant")
+    r = client.post("/api/reports", json={"sections": ["summary", "items"]})
+    assert r.status_code == 201, r.text
+    rep = r.json()
+    assert rep["status"] == "ready"
+    items_body = next(s["body"] for s in rep["sections"] if s["id"] == "items")
+    assert "Medication question for CMO" in items_body
+    all_items = {i["id"]: i for i in client.get("/api/reports/items").json()}
+    assert all_items[item["id"]]["reportId"] == rep["id"]
+    pending = client.get("/api/reports/items?pending=true").json()
+    assert item["id"] not in [i["id"] for i in pending]
+
+
+def test_checkins_not_included_without_permission(client):
+    rep = client.post("/api/reports", json={"sections": ["checkins"]}).json()
+    body = rep["sections"][0]["body"]
+    assert body == "Not included: permission required."
+    doc = client.get(f"/api/reports/{rep['id']}/file?format=json").json()
+    assert doc["checkinsIncluded"] is False
+    assert "mood" not in str(doc["sections"])
+
+
+def test_pdf_and_json_files_exist(client):
+    rep = client.post("/api/reports", json={"sections": ["summary", "vitals", "sleep"]}).json()
+    pdf = client.get(f"/api/reports/{rep['id']}/file?format=pdf")
+    assert pdf.status_code == 200
+    assert pdf.headers["content-type"] == "application/pdf"
+    assert pdf.content.startswith(b"%PDF")
+    doc = client.get(f"/api/reports/{rep['id']}/file?format=json").json()
+    assert doc["simulated"] is True and "SIMULATED" in doc["notice"]
+    assert doc["missionDay"] == 142
+    assert len(doc["sources"]) >= 1
+
+
+def test_unknown_section_is_rejected(client):
+    assert client.post("/api/reports", json={"sections": ["medicine"]}).status_code == 422
+    assert client.post("/api/reports", json={"sections": []}).status_code == 422
+
+
+def test_queue_then_window_sends_report(client):
+    rep = client.post("/api/reports", json={"sections": ["summary"]}).json()
+    q = client.post(f"/api/reports/{rep['id']}/queue")
+    assert q.status_code == 200 and q.json()["status"] == "queued"
+    assert client.get("/api/comms").json()["queuedCount"] >= 1
+
+    client.post("/api/comms/simulate-window")
+    after = {r["id"]: r for r in client.get("/api/reports").json()}[rep["id"]]
+    assert after["status"] == "sent"
+    assert after["sentTs"] is not None
+    assert client.get("/api/comms").json()["queuedCount"] == 0
+
+
+def test_only_ready_reports_can_be_queued(client):
+    sent = client.get("/api/reports?status=sent").json()
+    assert sent, "expected at least one sent report"
+    assert client.post(f"/api/reports/{sent[0]['id']}/queue").status_code == 409
+    assert client.post("/api/reports/rep-nope/queue").status_code == 404
