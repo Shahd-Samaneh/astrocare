@@ -1,5 +1,79 @@
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
-}
+/* Today-specific layout. Uses inherited theme color and existing shared components. */
+.page { display: flex; flex-direction: column; gap: 26px; padding-bottom: 32px; color: inherit; }
+.welcome { display: flex; justify-content: space-between; align-items: center; gap: 18px; flex-wrap: wrap; }
+.eyebrow { margin: 0 0 8px; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; opacity: .75; font-weight: 700; }
+.welcome h1 { margin: 0; font-size: clamp(1.7rem, 3vw, 2.35rem); letter-spacing: -.035em; line-height: 1.18; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.primaryAction, .secondaryAction { display: inline-flex; align-items: center; justify-content: center; text-align: center; min-height: 44px; padding: 10px 17px; border-radius: 12px; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; transition: filter .16s ease; }
+.primaryAction { border: 1px solid currentColor; background: color-mix(in srgb, currentColor 21%, transparent); color: inherit; }
+.secondaryAction { border: 1px solid color-mix(in srgb, currentColor 24%, transparent); background: transparent; color: inherit; }
+.primaryAction:hover, .secondaryAction:hover { filter: brightness(1.22); }
+.primaryAction:disabled { opacity: .5; cursor: not-allowed; }
+.quietStatus { padding: 18px 20px; border: 1px solid color-mix(in srgb, currentColor 17%, transparent); border-radius: 13px; background: color-mix(in srgb, currentColor 5%, transparent); }
+.error { padding: 10px 12px; border: 1px solid currentColor; border-radius: 8px; font-size: .92rem; }
+.success { padding: 8px 12px; font-weight: 600; border-inline-start: 3px solid currentColor; }
+.muted { opacity: .72; font-size: .9rem; line-height: 1.5; }
+.overview { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(160px, .8fr) minmax(0, 2.5fr); gap: 28px; padding: clamp(18px, 2.5vw, 34px); background: color-mix(in srgb, currentColor 5%, transparent); border: 1px solid color-mix(in srgb, currentColor 16%, transparent); border-radius: 20px; }
+.overview::before { content: ''; position: absolute; width: 280px; height: 280px; border: 1px solid color-mix(in srgb, currentColor 18%, transparent); border-radius: 50%; right: -150px; top: -190px; pointer-events: none; }
+.overviewContent { position: relative; z-index: 1; min-width: 0; }
+.kicker { margin: 0 0 8px; font-weight: 700; letter-spacing: .1em; font-size: .77rem; opacity: .82; }
+.overview h2 { font-size: clamp(1.25rem, 2vw, 1.7rem); margin: 0 0 18px; }
+.systemGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.systemTile { display: flex; gap: 10px; min-width: 0; min-height: 87px; padding: 13px; align-items: flex-start; border: 1px solid color-mix(in srgb, currentColor 14%, transparent); border-radius: 12px; background: color-mix(in srgb, currentColor 4%, transparent); color: inherit; text-decoration: none; }
+.systemTile svg { flex-shrink: 0; opacity: .85; }
+.systemTile strong { display: block; margin-bottom: 5px; font-size: .91rem; line-height: 1.25; }
+.systemTile small { display: block; opacity: .77; font-size: .79rem; line-height: 1.4; overflow-wrap: anywhere; }
+.systemTile small svg { vertical-align: middle; }
+.systemTile[href]:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+.caption { opacity: .65; font-size: .78rem; margin: 16px 0 0; line-height: 1.4; }
+.crewIllustration { position: relative; width: min(100%, 240px); min-height: 290px; margin-inline: auto; opacity: .82; }
+.helmet { position: absolute; top: 24px; left: 50%; transform: translateX(-50%); width: 92px; height: 92px; border: 3px solid currentColor; border-radius: 50%; background: color-mix(in srgb, currentColor 10%, transparent); }
+.helmet span { position: absolute; inset: 23px 13px; border: 2px solid currentColor; border-radius: 46%; opacity: .6; }
+.suit { position: absolute; top: 122px; left: 50%; transform: translateX(-50%); width: 100px; height: 107px; border-radius: 28px 28px 18px 18px; background: color-mix(in srgb, currentColor 24%, transparent); border: 2px solid color-mix(in srgb, currentColor 45%, transparent); display: grid; place-items: center; font-weight: 900; font-size: 21px; }
+.suit span { border: 1px solid currentColor; border-radius: 6px; width: 38px; height: 29px; text-align: center; }
+.leftArm, .rightArm { position: absolute; top: 142px; height: 102px; width: 31px; border-radius: 20px; background: color-mix(in srgb, currentColor 20%, transparent); }
+.leftArm { left: calc(50% - 83px); }.rightArm { right: calc(50% - 83px); }
+.leftLeg, .rightLeg { position: absolute; top: 220px; height: 80px; width: 37px; border-radius: 0 0 16px 16px; background: color-mix(in srgb, currentColor 21%, transparent); }
+.leftLeg { left: calc(50% - 41px); }.rightLeg { right: calc(50% - 41px); }
+.pin { position: absolute; width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; background: color-mix(in srgb, currentColor 32%, transparent); font-size: .76rem; font-weight: 800; z-index: 2; }
+.pinOne { top: 164px; left: 51%; }.pinTwo { top: 156px; left: 12%; }.pinThree { top: 216px; right: 8%; }.pinFour { top: 209px; left: 54%; }
+.crewIllustration p { position: absolute; width: 100%; text-align: center; top: 306px; margin: 0; opacity: .7; font-size: .71rem; }
+.section { display: flex; flex-direction: column; gap: 16px; }
+.sectionHead { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.sectionHead h2 { font-size: 1.35rem; margin: 0; }
+.sectionHead h2 span { font-size: .91rem; font-weight: 400; opacity: .75; }
+.inlineLink { display: inline-flex; align-items: center; gap: 5px; text-decoration: none; color: inherit; font-size: .91rem; font-weight: 700; }
+.inlineLink:hover { text-decoration: underline; }
+.vitalsGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.miniTrend { width: 100%; height: 42px; opacity: .78; }
+.cabinGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.cabinTile { border-radius: 11px; padding: 15px; background: color-mix(in srgb, currentColor 6%, transparent); min-width: 0; }
+.cabinLabel { display: block; font-size: .9rem; opacity: .75; }
+.cabinTile strong { display: block; margin: 6px 0; font-size: clamp(1.1rem, 2vw, 1.55rem); }
+.cabinMeta { display: block; font-size: .77rem; opacity: .67; line-height: 1.35; }
+.lowerGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.taskList { display: flex; flex-direction: column; }
+.task { display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 10px 3px; color: inherit; text-decoration: none; border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent); }
+.task:last-child { border-bottom: none; }.task > span:nth-child(2) { flex: 1; font-size: .94rem; }
+.taskStatus { opacity: .7; font-size: .8rem; }
+.task:hover { opacity: .8; }
+.sleepColumn { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.sleepValue { display: flex; flex-wrap: wrap; align-items: baseline; gap: 16px; }
+.sleepValue strong { font-size: clamp(1.5rem, 2.8vw, 2.1rem); }
+.sleepValue span { font-size: .83rem; opacity: .73; }
+.sleepBars { display: flex; height: 92px; align-items: flex-end; gap: 7px; margin: 18px 0 12px; }
+.sleepBarColumn { flex: 1; display: flex; align-items: end; height: 100%; min-width: 0; }
+.sleepBarColumn span { width: 100%; border-radius: 5px 5px 0 0; background: currentColor; opacity: .38; }
+.assistantLink { min-height: 78px; display: flex; align-items: center; gap: 13px; text-decoration: none; color: inherit; background: color-mix(in srgb, currentColor 5%, transparent); border: 1px solid color-mix(in srgb, currentColor 14%, transparent); border-radius: 13px; padding: 18px; }
+.assistantLink span { flex: 1; }.assistantLink strong { display: block; }.assistantLink small { display: block; margin-top: 4px; opacity: .7; }
+.assistantLink:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+.manualForm { padding: 18px; border-radius: 12px; border: 1px solid color-mix(in srgb, currentColor 20%, transparent); background: color-mix(in srgb, currentColor 5%, transparent); }
+.manualForm h3 { margin: 0 0 12px; font-size: 1.02rem; }
+.manualFields { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.manualFields label { display: flex; flex-direction: column; gap: 6px; font-size: .85rem; font-weight: 600; }
+.manualFields input { border-radius: 7px; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); background: transparent; color: inherit; padding: 10px; width: 160px; font: inherit; }
+.disclaimer { font-size: .78rem; opacity: .64; margin: 0; line-height: 1.5; }
+.visuallyHidden { position: absolute; height: 1px; width: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+@media (max-width: 1250px) { .systemGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .vitalsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .overview { grid-template-columns: 1fr; } .crewIllustration { display: none; } .cabinGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lowerGrid { grid-template-columns: 1fr; } }
+@media (max-width: 460px) { .systemGrid, .vitalsGrid, .cabinGrid { grid-template-columns: 1fr; } .page { gap: 18px; } .overview { padding: 16px; } .welcome h1 { font-size: 1.55rem; } }
