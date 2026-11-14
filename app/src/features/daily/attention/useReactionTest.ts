@@ -13,7 +13,7 @@ export const TRIALS = 5;
 export const MIN_DELAY_MS = 2000;
 export const MAX_DELAY_MS = 8000;
 export const NO_RESPONSE_MS = 5000;
-const FEEDBACK_MS = 900;
+const FEEDBACK_MS = 1000; // the frozen reaction time stays on screen ~1 s
 const FALSE_START_MS = 1500;
 
 export type Phase = 'idle' | 'waiting' | 'stimulus' | 'feedback' | 'falseStart' | 'done';

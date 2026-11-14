@@ -295,3 +295,25 @@
   height: 20px;
   accent-color: var(--accent);
 }
+
+/* ---- PVT millisecond counter ------------------------------------------------------- */
+.counter {
+  font-family: var(--font-mono);
+  font-size: 72px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.counterUnit {
+  font-size: 20px;
+  color: var(--text-muted);
+}
+
+.counterFrozen {
+  color: var(--text);
+}

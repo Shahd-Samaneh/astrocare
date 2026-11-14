@@ -1,7 +1,11 @@
 // Owner: Shahd. The large response area for the running test.
 // Click, tap or Space responds. Esc cancels. Space is handled on window only (not on the
 // element) so a focused element never counts one key press twice.
-import { useEffect, useRef } from 'react';
+// PVT-style display: when the stimulus appears, a millisecond counter counts up from 0;
+// on the response it freezes on the reaction time for ~1 s. With prefers-reduced-motion
+// a static highlighted target is shown instead. The counter is display only: the
+// measured time always comes from the controller (useReactionTest), so timing is identical.
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../../shared/components';
 import { TRIALS, isRunning, type ReactionState } from './useReactionTest';
 import styles from './Attention.module.css';
@@ -18,9 +22,41 @@ const MESSAGE: Record<string, { big: string; small: string }> = {
   falseStart: { big: 'Too soon', small: 'That was before the signal. This trial will repeat.' },
 };
 
+function usePrefersReducedMotion(): boolean {
+  const query = '(prefers-reduced-motion: reduce)';
+  const [reduced, setReduced] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(query).matches : false,
+  );
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const mq = window.matchMedia(query);
+    const on = () => setReduced(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return reduced;
+}
+
+/** Counts up from 0 ms while mounted (requestAnimationFrame). Display only. */
+function CountingMs() {
+  const [ms, setMs] = useState(0);
+  useEffect(() => {
+    const t0 = performance.now();
+    let raf = 0;
+    const tick = () => {
+      setMs(performance.now() - t0);
+      raf = window.requestAnimationFrame(tick);
+    };
+    raf = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(raf);
+  }, []);
+  return <>{String(Math.floor(ms)).padStart(3, '0')}</>;
+}
+
 export function TestRunner({ state, onRespond, onCancel }: TestRunnerProps) {
   const areaRef = useRef<HTMLDivElement>(null);
   const running = isRunning(state.phase);
+  const reducedMotion = usePrefersReducedMotion();
 
   useEffect(() => {
     areaRef.current?.focus();
@@ -98,8 +134,22 @@ export function TestRunner({ state, onRespond, onCancel }: TestRunnerProps) {
           onRespond();
         }}
       >
-        <span className={styles.stimulus} aria-hidden />
-        <span className={styles.big}>{msg.big}</span>
+        {state.phase === 'stimulus' && !reducedMotion ? (
+          <span className={styles.counter} aria-hidden>
+            <CountingMs />
+            <span className={styles.counterUnit}>ms</span>
+          </span>
+        ) : state.phase === 'feedback' ? (
+          <span className={`${styles.counter} ${styles.counterFrozen}`} aria-hidden>
+            {Math.round(state.lastMs ?? 0)}
+            <span className={styles.counterUnit}>ms</span>
+          </span>
+        ) : (
+          <>
+            <span className={styles.stimulus} aria-hidden />
+            <span className={styles.big}>{msg.big}</span>
+          </>
+        )}
         <span className={styles.small}>{msg.small}</span>
       </div>
       <p id="pvt-live" className="sr-only" aria-live="assertive">
