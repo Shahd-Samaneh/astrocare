@@ -24,7 +24,7 @@ from server.core.config import iso, utcnow
 from server.core.models import ApiModel, ExerciseLog, ExerciseReason, ExerciseStatus
 from server.core.simulator import load_json
 from server.core.status import mission_clock
-from server.rules.engine import run_rules
+from .engine_hooks import run_daily_engine
 
 router = APIRouter(tags=["daily"])
 
@@ -208,7 +208,7 @@ def log_exercise(body: ExerciseLogIn) -> ExerciseLog:
     )
     db.insert("exercise_logs", entry.model_dump())
     db.log_action("crew", f"exercise_{entry.status}", entry.id)
-    run_rules()
+    run_daily_engine()
     return entry
 
 

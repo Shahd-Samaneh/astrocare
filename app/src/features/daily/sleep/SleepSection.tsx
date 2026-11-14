@@ -4,7 +4,7 @@ import { Badge, Card, EmptyState, ErrorState, LoadingState, SectionHeader, Simul
 import { errorText, logApi, type QueryState } from '../api.log';
 import type { SleepSummary } from '../types.log';
 import { ManualSleepForm } from './ManualSleepForm';
-import { NasaBasisLocal } from './NasaBasisLocal';
+import { NasaBasis } from '../common/NasaBasis';
 import { SleepChart } from './SleepChart';
 import styles from './SleepSection.module.css';
 
@@ -99,8 +99,8 @@ export function SleepSection({ query, onChanged }: { query: QueryState<SleepSumm
       <div className={styles.stack}>
         {body}
         <ManualSleepForm onSaved={saved} />
-        <NasaBasisLocal
-          sourceIds={['nasa-hrp-sleep-risk', 'nasa-hrp-ongoing']}
+        <NasaBasis
+          ids={['nasa-hrp-sleep-risk', 'nasa-hrp-ongoing']}
           why="Short or irregular sleep can affect alertness and performance on long missions. We compare each night with your own average, and wrist-worn sleep monitoring is one way space agencies study this."
         />
       </div>

@@ -23,7 +23,7 @@ from server.core import db
 from server.core.config import iso, parse_ts, threshold
 from server.core.models import ApiModel, SleepSession
 from server.core.status import mission_clock
-from server.rules.engine import run_rules
+from .engine_hooks import run_daily_engine
 
 router = APIRouter(tags=["daily"])
 
@@ -124,7 +124,7 @@ def add_sleep(body: SleepIn) -> SleepSession:
     )
     db.insert("sleep_sessions", session.model_dump())
     db.log_action("crew", "log_sleep", session.id)
-    run_rules()
+    run_daily_engine()
     return session
 
 
@@ -139,5 +139,5 @@ def rate_sleep(sleep_id: str, body: RatingIn) -> SleepSession:
     _validate_rating(body.self_quality)
     db.update("sleep_sessions", sleep_id, {"self_quality": body.self_quality})
     db.log_action("crew", "rate_sleep", sleep_id)
-    run_rules()
+    run_daily_engine()
     return SleepSession.model_validate(db.get("sleep_sessions", sleep_id))

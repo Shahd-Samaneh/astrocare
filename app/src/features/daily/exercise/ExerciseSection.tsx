@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Badge, Button, Card, EmptyState, ErrorState, LoadingState, SectionHeader } from '../../../shared/components';
 import type { ExerciseReason } from '../../../shared/types/contracts';
-import { NasaBasisLocal } from '../sleep/NasaBasisLocal';
+import { NasaBasis } from '../common/NasaBasis';
 import { errorText, logApi, useDailyQuery } from '../api.log';
 import type { ExerciseItem } from '../types.log';
 import { AlternativesPanel } from './AlternativesPanel';
@@ -140,8 +140,8 @@ export function ExerciseSection({ missionDay, onChanged }: { missionDay: number 
             <strong>{count('skipped')}</strong> skipped.
           </p>
         )}
-        <NasaBasisLocal
-          sourceIds={['nasa-hrp-risks', 'nasa-bone-risk', 'nasa-hrp-hazards']}
+        <NasaBasis
+          ids={['nasa-hrp-risks', 'nasa-bone-risk', 'nasa-hrp-hazards']}
           why="Without gravity, muscles and bones are loaded much less, so regular exercise is part of staying fit in space. Long isolation also makes routines harder to keep. The durations here are an example plan, not a prescription."
         />
       </div>
