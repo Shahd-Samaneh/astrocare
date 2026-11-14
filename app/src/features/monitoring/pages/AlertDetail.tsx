@@ -10,7 +10,7 @@ import {
   ShieldAlert, ShieldCheck, Stethoscope, TriangleAlert,
 } from 'lucide-react';
 import { api, useApi } from '../../../shared/api/client';
-import type { Alert, AlertLevel, Availability, NextStep, Profile, Resource } from '../../../shared/types/contracts';
+import type { Alert, AlertLevel, Availability, NextStep, Resource } from '../../../shared/types/contracts';
 import styles from './AlertDetail.module.css';
 
 type Filter = 'all' | 'new' | 'ack';
@@ -29,42 +29,38 @@ function dateTime(iso: string): string {
   });
 }
 
-function assessResource(step: NextStep, resources: Resource[] | undefined, profile: Profile | undefined): ResourceCheck {
+/** The alert API is authoritative for resource availability. Inventory is optional display data. */
+function assessResource(step: NextStep, resource: Resource | undefined): ResourceCheck {
   if (!step.resourceId) {
     return { status: 'unknown', label: 'No resource linked', detail: 'This step does not reference an inventory item.', lowStock: false };
   }
-  if (!resources) {
-    return { status: 'unknown', label: 'Checking local inventory', detail: 'Stock and allergy information cannot be confirmed yet.', lowStock: false };
-  }
-  const resource = resources.find((item) => item.id === step.resourceId);
-  if (!resource) {
-    return { status: 'unknown', label: 'Inventory item not found', detail: `Resource ID: ${step.resourceId}`, lowStock: false };
-  }
 
-  const allergies = profile?.allergies.map((a) => a.trim().toLowerCase()) ?? [];
-  const conflictingAllergy = resource.contraindicatedAllergies.some((item) => allergies.includes(item.trim().toLowerCase()));
-  const expiration = resource.expiry ? new Date(resource.expiry) : null;
-  const expiredDate = !!expiration && !Number.isNaN(expiration.getTime()) && expiration.getTime() < Date.now();
-  const declared = step.availability;
+  const name = resource?.name ?? `Resource ${step.resourceId}`;
+  const status = step.availability ?? 'unknown';
+  const lowStock = status === 'available' && resource?.status === 'low';
 
-  if (conflictingAllergy || declared === 'allergy_conflict') {
-    return { status: 'allergy_conflict', label: 'Allergy conflict', detail: `${resource.name} — do not treat as available for use.`, lowStock: false };
+  switch (status) {
+    case 'available':
+      return {
+        status,
+        label: lowStock ? 'Available · low stock' : 'Available',
+        detail: `${name} — available according to this alert's backend resource check. Availability is not authorization to use it.`,
+        lowStock,
+      };
+    case 'out_of_stock':
+      return { status, label: 'Out of stock', detail: `${name} — the backend reports no available stock for this step.`, lowStock: false };
+    case 'expired':
+      return { status, label: 'Expired', detail: `${name} — the backend reports an expired resource.`, lowStock: false };
+    case 'allergy_conflict':
+      return { status, label: 'Allergy conflict', detail: `${name} — the backend identified a potential allergy conflict. Do not assume this is safe to use.`, lowStock: false };
+    default:
+      return {
+        status: 'unknown',
+        label: 'Availability not provided',
+        detail: `${name} — the alert has no resource availability result. Do not assume it is available.`,
+        lowStock: false,
+      };
   }
-  if (resource.status === 'expired' || expiredDate || declared === 'expired') {
-    return { status: 'expired', label: 'Expired', detail: `${resource.name} — expired resource.`, lowStock: false };
-  }
-  if (resource.status === 'out_of_stock' || resource.qty <= 0 || declared === 'out_of_stock') {
-    return { status: 'out_of_stock', label: 'Out of stock', detail: `${resource.name} — no usable stock recorded.`, lowStock: false };
-  }
-  if (!profile && resource.contraindicatedAllergies.length > 0) {
-    return { status: 'unknown', label: 'Allergy check pending', detail: `${resource.name} — astronaut profile unavailable.`, lowStock: resource.status === 'low' };
-  }
-  return {
-    status: 'available',
-    label: resource.status === 'low' ? 'Available · low stock' : 'Available in inventory',
-    detail: `${resource.name} · ${resource.qty} ${resource.unit}. Availability does not authorize clinical use.`,
-    lowStock: resource.status === 'low',
-  };
 }
 
 function AlertLabel({ level }: { level: AlertLevel }) {
@@ -136,7 +132,6 @@ function AlertView({ id }: { id: string }) {
   const path = `/alerts/${encodeURIComponent(id)}`;
   const detail = useApi<Alert>(path);
   const inventory = useApi<Resource[]>('/resources');
-  const profile = useApi<Profile>('/profile');
   const [updated, setUpdated] = useState<Alert | null>(null);
   const [ackBusy, setAckBusy] = useState(false);
   const [ackError, setAckError] = useState<string | null>(null);
@@ -169,7 +164,7 @@ function AlertView({ id }: { id: string }) {
       '', 'Data used:', ...(alert.dataUsed.length ? alert.dataUsed : ['Not listed']),
       '', 'Missing or unreliable:', ...(alert.missing.length ? alert.missing : ['None listed']),
       '', 'Possible factors (not confirmed causes):', ...(alert.possibleFactors.length ? alert.possibleFactors : ['None listed']),
-      '', 'Next steps:', ...(alert.nextSteps.length ? alert.nextSteps.map((s) => `- ${s.text}${s.lockedForCMO ? ' [CMO review required]' : ''}`) : ['None listed']),
+      '', 'Next steps:', ...(alert.nextSteps.length ? alert.nextSteps.map((s) => `- ${s.text}${s.resourceId ? ` [resource: ${s.resourceId}; availability: ${s.availability ?? 'not provided'}]` : ''}${s.lockedForCMO ? ' [CMO review required]' : ''}`) : ['None listed']),
       '', 'Sources:', ...(alert.sources.length ? alert.sources : ['None listed']),
       '', 'Review aid only — not a diagnosis or treatment authorization.',
     ];
@@ -265,7 +260,7 @@ function AlertView({ id }: { id: string }) {
                 <ol className={styles.stepList}>
                   {alert.nextSteps.map((step, i) => {
                     const resource = step.resourceId ? inventory.data?.find((item) => item.id === step.resourceId) : undefined;
-                    const check = assessResource(step, inventory.error ? undefined : inventory.data, profile.error ? undefined : profile.data);
+                    const check = assessResource(step, resource);
                     const locked = step.lockedForCMO || resource?.kind === 'medicine';
                     return (
                       <li className={styles.step} key={`${i}-${step.text}`}>
@@ -286,7 +281,7 @@ function AlertView({ id }: { id: string }) {
                   })}
                 </ol>
               ) : <p className={styles.empty}>No next steps have been defined by this rule.</p>}
-              {(inventory.error || profile.error) && <p className={styles.error} role="alert">Resource or allergy verification is incomplete. Do not assume a resource is safe or available.</p>}
+              {inventory.error && <p className={styles.helper}>Resource names could not be loaded. Availability labels above still come from the alert backend.</p>}
               <p className={styles.helper}>Stock availability is not a clinical recommendation. Follow mission medical procedures and CMO review requirements.</p>
             </article>
           </section>
