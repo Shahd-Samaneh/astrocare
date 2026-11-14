@@ -57,19 +57,23 @@ def run(model: str) -> dict:
             "firstShownS": round(first_shown, 1) if first_shown else None,
             "totalS": round(total, 1), "tokensPerSec": round(tps, 1) if tps else None,
             "tokens": st.get("evalCount"),
+            "promptTokensRead": st.get("promptEvalCount"), "promptReadS": round(st["promptEvalMs"] / 1000, 1) if st.get("promptEvalMs") else None,
             "answer": a["answer"], "sources": [s["title"] for s in a["sources"]], "missing": a["missing"],
         })
         print(f"[{model}] {q[:45]:45s} first={rows[-1]['firstShownS']}s total={rows[-1]['totalS']}s "
-              f"tok/s={rows[-1]['tokensPerSec']} mode={a['mode']} refused={a['refused']}", flush=True)
-    _unload(model)
+              f"tok/s={rows[-1]['tokensPerSec']} prompt_read={rows[-1]['promptTokensRead']}tok/{rows[-1]['promptReadS']}s mode={a['mode']} refused={a['refused']}", flush=True)
     return {"model": model, "loadS": load_s, "rows": rows}
 
 
 def main(argv: list[str]) -> int:
     models = argv or ["llama3.2:3b"]
     for m in models:
-        _unload(m)
-    report = [run(m) for m in models]
+        _unload(m)  # every model starts from the same (unloaded) state
+    report = []
+    for i, m in enumerate(models):
+        report.append(run(m))
+        if i < len(models) - 1:
+            _unload(m)  # free RAM for the next model; the last one stays loaded for the app
     out = Path(__file__).resolve().parents[3] / "data" / "assistant_bench.json"
     out.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Report: {out}")

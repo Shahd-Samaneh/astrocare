@@ -2,9 +2,10 @@
 
     node scripts/py.mjs -m server.features.assistant.ingest        # (re)index, idempotent
     node scripts/py.mjs -m server.features.assistant.ingest --dry  # show chunks, no Ollama
+    node scripts/py.mjs -m server.features.assistant.ingest --rebuild  # clean rebuild (after a chunk-size change)
 
 Each file starts with a header (title:, url:, id:) and a blank line. The text is split into
-~500-word chunks with a small overlap and embedded with nomic-embed-text via local Ollama.
+~300-word chunks (settings: assistant_chunk_words) with a small overlap and embedded with nomic-embed-text via local Ollama.
 Idempotent: a chunk whose text + model hash is unchanged is not re-embedded; chunks of
 removed files (or past the new end of a shorter file) are deleted.
 """
@@ -94,27 +95,42 @@ def _hash(text: str, model: str) -> str:
     return hashlib.sha1(f"{model}\n{text}".encode("utf-8")).hexdigest()
 
 
-def ingest(ref_dir: Path = REFERENCES_DIR, *, batch: int = 4, verbose: bool = False) -> dict[str, int]:
+_INSERT = ("INSERT OR REPLACE INTO assistant_chunks (id, source_id, title, url, chunk_index, text,"
+           " content_hash, embed_model, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+
+
+def _embed_all(todo: list[Chunk], batch: int, verbose: bool) -> list[list[float]]:
+    vecs: list[list[float]] = []
+    for start in range(0, len(todo), batch):
+        part = todo[start:start + batch]
+        # generous timeout: the first call also loads the model (dev-time command, not the app)
+        vecs += embed([DOC_PREFIX + c.text for c in part], timeout=300.0)
+        if verbose:
+            print(f"  embedded {min(start + batch, len(todo))}/{len(todo)}", flush=True)
+    return vecs
+
+
+def ingest(ref_dir: Path = REFERENCES_DIR, *, batch: int = 4, verbose: bool = False,
+           rebuild: bool = False) -> dict[str, int]:
+    """Index ref_dir. rebuild=True re-embeds everything and replaces the whole table in one
+    transaction (the old index stays intact if embedding fails half-way)."""
     store.ensure_tables()
     model = ollama_cfg()["embed_model"]
     chunks = build_chunks(ref_dir)
     with db.connect() as conn:
         existing = {r["id"]: r["content_hash"] for r in conn.execute("SELECT id, content_hash FROM assistant_chunks")}
 
-    todo = [c for c in chunks if existing.get(c.id) != _hash(c.text, model)]
-    for start in range(0, len(todo), batch):
-        part = todo[start:start + batch]
-        # generous timeout: the first call also loads the model (dev-time command, not the app)
-        vecs = embed([DOC_PREFIX + c.text for c in part], timeout=300.0)
-        if verbose:
-            print(f"  embedded {min(start + batch, len(todo))}/{len(todo)}", flush=True)
-        with db.connect() as conn:
-            conn.executemany(
-                "INSERT OR REPLACE INTO assistant_chunks (id, source_id, title, url, chunk_index, text,"
-                " content_hash, embed_model, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                [(c.id, c.source_id, c.title, c.url, c.chunk_index, c.text, _hash(c.text, model), model,
-                  json.dumps(v)) for c, v in zip(part, vecs)],
-            )
+    todo = chunks if rebuild else [c for c in chunks if existing.get(c.id) != _hash(c.text, model)]
+    vecs = _embed_all(todo, batch, verbose)
+    rows = [(c.id, c.source_id, c.title, c.url, c.chunk_index, c.text, _hash(c.text, model), model,
+             json.dumps(v)) for c, v in zip(todo, vecs)]
+    with db.connect() as conn:
+        if rebuild:
+            conn.execute("DELETE FROM assistant_chunks")
+        conn.executemany(_INSERT, rows)
+    if rebuild:
+        return {"chunks": len(chunks), "embedded": len(todo), "deleted": len(existing),
+                "sources": len({c.source_id for c in chunks})}
 
     keep = {c.id for c in chunks}
     stale = [cid for cid in existing if cid not in keep]
@@ -135,7 +151,7 @@ def main(argv: list[str]) -> int:
             print(f"{c.id:40s} {len(c.text.split()):4d} words  {c.title[:60]}")
         return 0
     try:
-        stats = ingest(verbose=True)
+        stats = ingest(verbose=True, rebuild="--rebuild" in argv)
     except OllamaError as e:
         print(f"Ollama is not reachable on localhost (start it, then re-run): {e}")
         return 1

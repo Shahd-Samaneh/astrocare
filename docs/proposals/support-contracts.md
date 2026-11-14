@@ -77,19 +77,19 @@ assistant_max_answer_sec:
   note: "Hard stop for a streamed answer; the part written so far is kept and marked incomplete."
 
 assistant_top_k:
-  value: 4
+  value: 3
   unit: chunks
-  source: "Team decision (retrieval), not clinical"
-  note: "Reference chunks given to the model per question."
+  source: "Team decision (retrieval latency), not clinical"
+  note: "Reference passages given to the model per question (was 4)."
 
 assistant_chunk_words:
-  value: 500
+  value: 300
   unit: words
-  source: "AstroCare_Full_Plan.md §11 (team decision)"
-  note: "Chunk size for references/ ingestion."
+  source: "Team decision (retrieval latency), not clinical; replaces the ~500 words in AstroCare_Full_Plan.md §11"
+  note: "Chunk size for references/ ingestion. After a change, rebuild: python -m server.features.assistant.ingest --rebuild"
 
 assistant_chunk_overlap_words:
-  value: 50
+  value: 40
   unit: words
   source: "Team decision (retrieval), not clinical"
   note: "Overlap between consecutive chunks."
@@ -103,7 +103,7 @@ assistant_max_answer_tokens:
 assistant_num_ctx:
   value: 4096
   unit: tokens
-  source: "Team decision: fits system prompt + user data + 4 chunks of ~500 words"
+  source: "Team decision: fits system prompt + user data + 3 passages of ~300 words"
   note: "Ollama context window for the chat model."
 
 assistant_slow_reply_ms:
@@ -113,6 +113,16 @@ assistant_slow_reply_ms:
   note: "The UI shows a 'still thinking' message after this."
 ```
 Until merged, `server/features/assistant/settings.py` reads these keys from `thresholds.yaml` and falls back to the same values.
+
+**Plan note (AstroCare_Full_Plan.md §11, "المساعد"):** the references are now split into passages of **~300 words
+with a 40-word overlap**, and the model gets the **top 3** (not ~500 words / top 4). Reason: on the demo laptop,
+reading a ~2,400-token prompt took most of the 20 s first-token budget. Measured result: see the benchmark in the
+PR description. Please update the plan line when you merge this.
+
+**Also (no new keys):** every Ollama call sends `keep_alive: "60m"`, and the assistant router warms the chat and
+embed models once at server startup in a background thread (router `on_startup`, so `main.py` is unchanged;
+skipped under pytest or with `ASTROCARE_NO_WARMUP=1`). The system prompt is now identical on every call, with the
+answer language on a `LANGUAGE:` line just before the question, so Ollama can reuse the cached prompt prefix.
 
 ### A6. Tables (created by my own code, not `core/db.TABLES`)
 

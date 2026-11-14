@@ -15,7 +15,7 @@ import httpx
 from .settings import chat_model, ollama_cfg, setting
 
 # Keep both models loaded between questions (a cold load can take over a minute on CPU).
-KEEP_ALIVE = "30m"
+KEEP_ALIVE = "60m"
 
 
 class OllamaError(RuntimeError):
@@ -32,6 +32,9 @@ class ChatResult:
     eval_count: int | None = None        # tokens generated
     eval_duration_ns: int | None = None  # time spent generating them
     first_token_ms: int | None = None    # from the start of chat_stream to the first token
+    prompt_eval_count: int | None = None # prompt length in tokens (Ollama reports the full prompt even when cached)
+    # prompt_eval_ms is the real reading time: it drops when Ollama reuses the cached prompt prefix
+    prompt_eval_ms: int | None = None
     model: str | None = None
     complete: bool = True                # False: stopped early (stall or total cap); text is partial
 
@@ -130,6 +133,8 @@ def chat_stream(
     if not text:
         raise OllamaError("chat returned an empty answer")
     yield ChatResult(text=text, eval_count=final.get("eval_count"), eval_duration_ns=final.get("eval_duration"),
+                     prompt_eval_count=final.get("prompt_eval_count"),
+                     prompt_eval_ms=int(final["prompt_eval_duration"] / 1e6) if final.get("prompt_eval_duration") else None,
                      first_token_ms=first_ms, model=model, complete=complete)
 
 

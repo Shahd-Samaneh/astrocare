@@ -43,9 +43,10 @@ class FakeChat:
 
     def __call__(self, system: str, user: str, **_kw):
         self.calls.append((system, user))
-        for tok in re.findall(r"\S+\s*|\s+", self.reply):
+        reply = self.reply(user) if callable(self.reply) else self.reply  # callable: reply from the prompt
+        for tok in re.findall(r"\S+\s*|\s+", reply):
             yield tok
-        yield llm.ChatResult(text=self.reply.strip(), eval_count=40, eval_duration_ns=2_000_000_000,
+        yield llm.ChatResult(text=reply.strip(), eval_count=40, eval_duration_ns=2_000_000_000,
                              first_token_ms=1500, model="fake", complete=self.complete)
 
 
@@ -190,13 +191,15 @@ def test_permissions_ignores_unknown_keys(client, reset_permissions):
 
 # ---- answer shape, log, citations -----------------------------------------------------
 def test_llm_answer_shape_and_log(client, fake_chat, mock_ctx):
-    fake_chat.reply = "Sleep loss is common in spaceflight [3]. Your sleep was short [1].\nMISSING: none"
+    fake_chat.reply = lambda user: (
+        f"Sleep loss is common in spaceflight [{_num(user, 'Sleep risk')}]. "
+        f"Your sleep was short [{_num(user, 'Your data: sleep')}].\nMISSING: none")
     before = len(store.log_rows(10_000))
     body = client.post("/api/assistant/ask", json={"question": "Is my sleep a problem?"}).json()
     assert set(body) >= {"answer", "sources", "missing", "refused", "mode", "latencyMs"}
-    # [3] (the reference) is cited first, so it becomes [1]; the user data becomes [2]
+    # the reference is cited first, so it becomes [1]; the sleep data becomes [2]
     assert body["answer"] == "Sleep loss is common in spaceflight [1]. Your sleep was short [2]."
-    assert [s["id"] for s in body["sources"]] == ["nasa-hrp-sleep-risk", "user-data"]
+    assert [s["id"] for s in body["sources"]] == ["nasa-hrp-sleep-risk", "user-data:sleep"]
     assert body["sources"][0]["url"] == "https://www.nasa.gov/example"
     assert body["missing"] == []
     rows = store.log_rows(10_000)
@@ -210,10 +213,86 @@ def test_parse_answer_drops_invalid_citations():
     assert parsed.missing == ["x"]
 
 
+def _num(user: str, title_start: str) -> int:
+    """The [n] number the prompt gave to the source whose title starts with `title_start`."""
+    return int(re.search(rf"^\[(\d+)\] {re.escape(title_start)}", user, re.M).group(1))
+
+
 def test_arabic_question_asks_for_arabic_answer(client, fake_chat, mock_ctx):
     client.post("/api/assistant/ask", json={"question": "ليش طلعلي التنبيه؟"})
-    system, _ = fake_chat.calls[0]
-    assert "Write the answer in Arabic" in system
+    _, user = fake_chat.calls[0]
+    assert "LANGUAGE: Arabic\nQUESTION: ليش طلعلي التنبيه؟" in user
+
+
+# ---- prompt layout (prompt cache) -----------------------------------------------------
+def test_system_prompt_identical_on_every_call(client, fake_chat, mock_ctx):
+    for q in ["Why did I get the alert?", "ليش طلعلي التنبيه؟", "How does radiation affect astronauts?"]:
+        client.post("/api/assistant/ask", json={"question": q})
+    systems = {s for s, _ in fake_chat.calls}
+    assert len(systems) == 1
+    assert "{" not in next(iter(systems))  # no leftover placeholders
+
+
+def test_prompt_order_data_then_passages_then_question(client, fake_chat, mock_ctx):
+    client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"})
+    _, user = fake_chat.calls[0]
+    i_data, i_alert = user.index("Your data: vital signs"), user.index("Alert R-FAT-01")
+    i_refs, i_q = user.index("REFERENCE PASSAGES"), user.index("QUESTION:")
+    assert i_data < i_alert < i_refs < i_q
+    assert user.rstrip().endswith("QUESTION: Why did I get the alert?")
+
+
+def test_user_data_prefix_stable_between_questions(client, fake_chat, mock_ctx):
+    client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"})
+    client.post("/api/assistant/ask", json={"question": "How does radiation affect astronauts?"})
+    (_, a), (_, b) = fake_chat.calls
+    assert a.split("REFERENCE PASSAGES")[0] == b.split("REFERENCE PASSAGES")[0]
+
+
+# ---- "my data" questions cover sleep and attention, with citations ------------------
+def test_data_summary_adds_missing_sleep_and_attention(client, fake_chat, mock_ctx):
+    fake_chat.reply = lambda user: f"Heart rate is 74 bpm [{_num(user, 'Your data: vital signs')}].\nMISSING: none"
+    body = client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"}).json()
+    ids = [s["id"] for s in body["sources"]]
+    assert ids == ["user-data:vitals", "user-data:sleep", "user-data:attention"]
+    assert "Sleep, last 7 days: 5 nights" in body["answer"] and "[2]" in body["answer"]
+    assert "Attention tests, last 7 days: 2 tests" in body["answer"] and "[3]" in body["answer"]
+    assert "281 ms to 338 ms" in body["answer"]
+
+
+def test_data_summary_not_duplicated_when_model_covers_it(client, fake_chat, mock_ctx):
+    fake_chat.reply = lambda user: (f"You slept 5 h 20 m on average [{_num(user, 'Your data: sleep')}] and your "
+                                    f"attention was slower [{_num(user, 'Your data: attention')}].\nMISSING: none")
+    body = client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"}).json()
+    assert "Sleep, last 7 days" not in body["answer"] and len(body["sources"]) == 2
+
+
+def test_title_heading_counts_as_citation(client, fake_chat, mock_ctx):
+    fake_chat.reply = ("Your data: sleep (7 days)\nYou slept about 5 h 20 m on the last nights.\n\n"
+                       "**Your data: attention tests (7 days)**\nThe latest test was slower.\nMISSING: none")
+    body = client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"}).json()
+    assert [s["id"] for s in body["sources"]] == ["user-data:sleep", "user-data:attention"]
+    assert "Sleep, last 7 days" not in body["answer"]  # covered: nothing appended
+    assert "Your data: sleep (7 days) [1]" in body["answer"]
+
+
+def test_sentences_naming_a_source_get_cited(client, fake_chat, mock_ctx):
+    fake_chat.reply = ("The alert Short sleep and slower attention was raised for you. "
+                       "Your sleep data shows short nights. Your attention tests were slower. "
+                       "Sleep loss is a known spaceflight risk.\nMISSING: none")
+    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    ids = [s["id"] for s in body["sources"]]
+    assert ids[0] == "alert:al-mock-fat01" and "user-data:sleep" in ids and "user-data:attention" in ids
+    assert "was raised for you [1]." in body["answer"]
+    # a sentence naming no source stays uncited (no invented citation)
+    assert "Sleep loss is a known spaceflight risk." in body["answer"]
+
+
+def test_not_shared_data_is_labelled(client, fake_chat, mock_ctx):
+    set_permissions({"assistant": {"sleep": False}})
+    client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"})
+    _, user = fake_chat.calls[0]
+    assert re.search(r"\] Your data: sleep \(7 days\)\nNot shared with the assistant", user)
 
 
 # ---- ingest + retrieval -------------------------------------------------------------
@@ -222,13 +301,39 @@ def test_ingest_is_idempotent(client, tmp_path, monkeypatch):
     calls: list[int] = []
     monkeypatch.setattr(ingest, "embed", lambda texts, timeout=60.0: calls.append(len(texts)) or [[1.0, 0.0]] * len(texts))
     first = ingest.ingest(tmp_path)
-    assert first["chunks"] == 3 and first["embedded"] == 3  # 500-word chunks, 50 overlap
+    assert first["chunks"] == 5 and first["embedded"] == 5  # 300-word chunks, 40 overlap
     second = ingest.ingest(tmp_path)
-    assert second["embedded"] == 0 and second["chunks"] == 3
+    assert second["embedded"] == 0 and second["chunks"] == 5
     meta = store.source_meta()
     assert meta["doc-a"] == ("Doc A", "https://example.org/a")
     with db.connect() as conn:  # leave no fake vectors for other tests
         conn.execute("DELETE FROM assistant_chunks WHERE source_id = 'doc-a'")
+
+
+def test_ingest_rebuild_replaces_everything(client, tmp_path, monkeypatch):
+    (tmp_path / "b.txt").write_text("title: Doc B\nurl: u\nid: doc-b\n\n" + "word " * 400, encoding="utf-8")
+    monkeypatch.setattr(ingest, "embed", lambda texts, timeout=60.0: [[0.0, 1.0]] * len(texts))
+    ingest.ingest(tmp_path)
+    stats = ingest.ingest(tmp_path, rebuild=True)
+    assert stats["embedded"] == stats["chunks"] == 2  # everything re-embedded, nothing skipped
+    assert {c["source_id"] for c in store.all_chunks()} == {"doc-b"}  # old rows gone
+    with db.connect() as conn:
+        conn.execute("DELETE FROM assistant_chunks WHERE source_id = 'doc-b'")
+
+
+def test_ingest_rebuild_keeps_old_index_if_embedding_fails(client, tmp_path, monkeypatch):
+    (tmp_path / "c.txt").write_text("title: C\nurl: u\nid: doc-c\n\n" + "word " * 100, encoding="utf-8")
+    monkeypatch.setattr(ingest, "embed", lambda texts, timeout=60.0: [[1.0, 0.0]] * len(texts))
+    ingest.ingest(tmp_path)
+
+    def boom(texts, timeout=60.0):
+        raise llm.OllamaError("off")
+    monkeypatch.setattr(ingest, "embed", boom)
+    with pytest.raises(llm.OllamaError):
+        ingest.ingest(tmp_path, rebuild=True)
+    assert {c["source_id"] for c in store.all_chunks()} == {"doc-c"}
+    with db.connect() as conn:
+        conn.execute("DELETE FROM assistant_chunks WHERE source_id = 'doc-c'")
 
 
 def test_parse_reference_header(tmp_path):

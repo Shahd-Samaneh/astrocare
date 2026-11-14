@@ -16,9 +16,9 @@ DEFAULT_CHAT_MODEL = "llama3.2:3b"
 _PENDING_DEFAULTS: dict[str, Any] = {
     "assistant_first_token_timeout_sec": 20,
     "assistant_max_answer_sec": 90,
-    "assistant_top_k": 4,
-    "assistant_chunk_words": 500,
-    "assistant_chunk_overlap_words": 50,
+    "assistant_top_k": 3,
+    "assistant_chunk_words": 300,
+    "assistant_chunk_overlap_words": 40,
     "assistant_max_answer_tokens": 200,
     "assistant_num_ctx": 4096,
 }

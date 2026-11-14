@@ -21,7 +21,7 @@ from . import llm, store
 from .context import build_context, latest_alert
 from .fallback import build_fallback
 from .models import AssistantAnswer, AssistantSource
-from .prompt import build_prompt, parse_answer
+from .prompt import build_prompt, ensure_data_coverage, parse_answer
 from .retrieval import retrieve
 from .safety import check_question, is_arabic, medicine_terms, mentions_medicine_name, refusal_text
 from .settings import chat_model, setting
@@ -113,7 +113,8 @@ def answer_events(
                 out = _refusal(question, "medication", t0)
             else:
                 assert result is not None
-                parsed = parse_answer(result.text, prompt)
+                parsed = ensure_data_coverage(parse_answer(result.text, prompt), prompt, ctx, question,
+                                              arabic=arabic)
                 missing = parsed.missing
                 if not result.complete:
                     # a cut-off answer can only have a cut-off MISSING line: don't trust its items
@@ -140,6 +141,8 @@ def answer_events(
             "firstTokenMs": first_ms,
             "evalCount": result.eval_count if result else None,
             "evalDurationNs": result.eval_duration_ns if result else None,
+            "promptEvalCount": result.prompt_eval_count if result else None,
+            "promptEvalMs": result.prompt_eval_ms if result else None,
         },
     }
 

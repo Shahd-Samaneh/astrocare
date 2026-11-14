@@ -87,6 +87,15 @@ def _within_days(items: list[dict], key: str, days: int = DAYS) -> list[dict]:
     return [i for i in items if i.get(key) and parse_ts(i[key]) >= since]
 
 
+def _age(minutes: int | None) -> str | None:
+    """Reading age rounded to 10 minutes, e.g. 'about 2 h 10 m'. Coarse on purpose: the
+    user-data part of the prompt then stays identical between questions (prompt cache)."""
+    if minutes is None:
+        return None
+    m = int(round(minutes / 10.0) * 10)
+    return f"about {m} m" if m < 60 else f"about {m // 60} h {m % 60:02d} m"
+
+
 def _hm(minutes: float) -> str:
     return f"{int(minutes // 60)} h {int(round(minutes % 60)):02d} m"
 
@@ -139,7 +148,7 @@ def build_context(perms: dict | None = None) -> dict[str, Any]:
                                "note": "no reading since the start of today's mission day"})
                 continue
             vitals.append({"metric": lr.get("metric"), "value": r.get("value"), "unit": r.get("unit"),
-                           "quality": lr.get("quality"), "ageMinutes": lr.get("ageMinutes")})
+                           "quality": lr.get("quality"), "age": _age(lr.get("ageMinutes"))})
         ctx["vitals"] = vitals
     else:
         ctx["notShared"].append("vitals")

@@ -14,6 +14,9 @@ Medication / dose / diagnosis questions are refused before the model is called.
 from __future__ import annotations
 
 import json
+import os
+import sys
+import threading
 
 from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import StreamingResponse
@@ -24,7 +27,18 @@ from .permissions import get_permissions, set_permissions
 from .service import answer_events, answer_question
 from .settings import chat_model, ollama_cfg
 
-router = APIRouter(prefix="/assistant", tags=["assistant"])
+
+def _warm_up_in_background() -> None:
+    """Server startup: load the chat + embed models in a background thread (never blocks
+    startup; warm_up ignores errors, so a missing Ollama is fine). Skipped under pytest or
+    with ASTROCARE_NO_WARMUP=1."""
+    if "pytest" in sys.modules or os.environ.get("ASTROCARE_NO_WARMUP") == "1":
+        return
+    threading.Thread(target=llm.warm_up, name="assistant-warmup", daemon=True).start()
+
+
+# Router-level startup hook: runs next to main.py's lifespan, so core/main.py stays untouched.
+router = APIRouter(prefix="/assistant", tags=["assistant"], on_startup=[_warm_up_in_background])
 
 
 @router.post("/ask")
