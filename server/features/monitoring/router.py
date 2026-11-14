@@ -18,7 +18,7 @@ from server.core.models import (
     Quality, Reading, Resource, Sensor,
 )
 from server.core.simulator import UNITS
-from server.core.status import mission_day_start
+from server.core.status import mission_clock, mission_day_start
 
 router = APIRouter(tags=["monitoring"])
 
@@ -191,6 +191,166 @@ def cabin_latest() -> list[CabinLatest]:
             metric=metric, value=latest.value, unit=latest.unit, ts=latest.ts,
             status=_cabin_status(metric, latest, now),
         ))
+    return out
+
+
+# ---- Body-systems tiles (Today screen) ------------------------------------
+# One tile per physiological system. Status is derived from existing readings,
+# baselines and thresholds only (no new clinical numbers), and may be forced to
+# "review" by an open alert that belongs to the system.
+BODY_SYSTEMS = (
+    "cardiovascular", "respiratory", "sleep", "cognition",
+    "bone_muscle", "radiation", "vision", "thermoregulation",
+)
+
+# Rule-id prefixes that belong to each system, for linking open alerts. Most are
+# reserved for rules that do not exist yet; today only R-DATA-01 is produced.
+SYSTEM_RULE_PREFIXES: dict[str, tuple[str, ...]] = {
+    "cardiovascular": ("R-HR-",),
+    "respiratory": ("R-SPO2-", "R-RESP-"),
+    "sleep": ("R-FAT-", "R-SLEEP-"),
+    "cognition": ("R-FAT-", "R-COG-"),
+    "bone_muscle": ("R-EXW-", "R-MSK-"),
+    "radiation": ("R-RAD-",),
+    "vision": ("R-VIS-", "R-SANS-"),
+    "thermoregulation": ("R-DATA-", "R-THERM-"),
+}
+
+BodySystemStatus = Literal["stable", "review", "no_data"]
+_NO_MEASUREMENTS = "No connected measurements"
+
+
+class BodySystem(ApiModel):
+    """A Today-screen tile for one physiological system."""
+
+    id: str
+    status: BodySystemStatus
+    text: str
+    alert_id: Optional[str] = None
+
+
+def _profile() -> Optional[Profile]:
+    rows = db.query("profiles", limit=1)
+    return Profile.model_validate(rows[0]) if rows else None
+
+
+def _latest_good(metric: str) -> Optional[Reading]:
+    rows = db.query("readings", "metric = ? AND quality = 'good'", (metric,), order_by="ts DESC", limit=1)
+    return Reading.model_validate(rows[0]) if rows else None
+
+
+def _outside_baseline(value: float, mean: float, sd: float) -> bool:
+    k = float(threshold("hr_sd_multiplier"))
+    return value < mean - k * sd or value > mean + k * sd
+
+
+def _cardiovascular(profile: Optional[Profile]) -> tuple[BodySystemStatus, str]:
+    r = _latest_good("heart_rate")
+    base = profile.baseline.get("heart_rate") if profile else None
+    if r is None or base is None:
+        return "no_data", _NO_MEASUREMENTS
+    k = float(threshold("hr_sd_multiplier"))
+    if r.value > base.mean + k * base.sd:
+        return "review", "HR above baseline"
+    if r.value < base.mean - k * base.sd:
+        return "review", "HR below baseline"
+    return "stable", "HR in baseline"
+
+
+def _respiratory() -> tuple[BodySystemStatus, str]:
+    r = _latest_good("spo2")
+    if r is None:
+        return "no_data", _NO_MEASUREMENTS
+    v = round(r.value)
+    if r.value < float(threshold("spo2_min")):
+        return "review", f"SpO₂ {v}% (low)"
+    return "stable", f"SpO₂ {v}%"
+
+
+def _sleep() -> tuple[BodySystemStatus, str]:
+    rows = db.query("sleep_sessions", order_by="start DESC", limit=3)
+    if not rows:
+        return "no_data", _NO_MEASUREMENTS
+    short_h = float(threshold("sleep_short_hours"))
+    n = sum(1 for r in rows if r["duration_min"] / 60 < short_h)
+    if n >= 2:
+        return "review", f"{n} short nights"
+    if n == 1:
+        return "stable", "1 short night"
+    return "stable", "Sleep in range"
+
+
+def _cognition(profile: Optional[Profile]) -> tuple[BodySystemStatus, str]:
+    rows = db.query("cognitive_tests", order_by="ts DESC", limit=1)
+    base = profile.baseline.get("pvt_median_ms") if profile else None
+    if not rows or base is None or base.mean == 0:
+        return "no_data", _NO_MEASUREMENTS
+    pct = (rows[0]["median_ms"] - base.mean) / base.mean * 100
+    rounded = round(pct)
+    if pct > float(threshold("attention_slower_pct")):
+        return "review", f"reaction +{rounded} %"
+    sign = "+" if rounded > 0 else ""
+    return "stable", f"reaction {sign}{rounded} %"
+
+
+def _bone_muscle(today: int) -> tuple[BodySystemStatus, str]:
+    # Only past days of this mission week (today excluded: it is not over yet).
+    plan_day = {p["id"]: p["day"] for p in db.query("exercise_plans")}
+    logs = [l for l in db.query("exercise_logs") if today - 6 <= plan_day.get(l["plan_id"], -1) <= today - 1]
+    if not logs:
+        return "no_data", "No exercise logged this week"
+    done = sum(1 for l in logs if l["status"] == "done")
+    partial = sum(1 for l in logs if l["status"] == "partial")
+    return "stable", f"{done} done, {partial} partial this week"
+
+
+def _thermoregulation(profile: Optional[Profile], now, sensors: list[Sensor]) -> tuple[BodySystemStatus, str]:
+    rows = db.query("readings", "metric = 'skin_temp'", order_by="ts DESC", limit=1)
+    sensor = next((s for s in sensors if "skin_temp" in s.metrics), None)
+    r = Reading.model_validate(rows[0]) if rows else None
+    age = (now - parse_ts(r.ts)).total_seconds() / 60 if r else None
+    if r is None or (age is not None and age > float(threshold("stale_minutes"))):
+        if sensor and sensor.status != "connected":
+            return "no_data", f"{sensor.name.split()[-1].lower()} {sensor.status.replace('_', ' ')}"
+        return "no_data", _NO_MEASUREMENTS
+    base = profile.baseline.get("skin_temp") if profile else None
+    if base is None:
+        return "no_data", _NO_MEASUREMENTS
+    if _outside_baseline(r.value, base.mean, base.sd):
+        return "review", "Skin temp out of baseline"
+    return "stable", "Skin temp in baseline"
+
+
+@router.get("/body-systems")
+def body_systems() -> list[BodySystem]:
+    now = utcnow()
+    today = mission_clock()[1]
+    profile = _profile()
+    sensors = [Sensor.model_validate(s) for s in db.query("sensors")]
+    open_alerts = [Alert.model_validate(a) for a in db.query("alerts", "status != 'closed'", order_by="ts DESC")]
+
+    computed: dict[str, tuple[BodySystemStatus, str]] = {
+        "cardiovascular": _cardiovascular(profile),
+        "respiratory": _respiratory(),
+        "sleep": _sleep(),
+        "cognition": _cognition(profile),
+        "bone_muscle": _bone_muscle(today),
+        "radiation": ("no_data", _NO_MEASUREMENTS),
+        "vision": ("no_data", _NO_MEASUREMENTS),
+        "thermoregulation": _thermoregulation(profile, now, sensors),
+    }
+
+    out: list[BodySystem] = []
+    for system in BODY_SYSTEMS:
+        status, text = computed[system]
+        alert_id = None
+        alert = next((a for a in open_alerts if a.rule_id.startswith(SYSTEM_RULE_PREFIXES[system])), None)
+        if alert is not None:
+            if alert.rule_id.startswith("R-DATA-"):
+                alert_id = alert.id  # R-DATA-* explains no_data; it never forces review
+            else:
+                status, alert_id = "review", alert.id
+        out.append(BodySystem(id=system, status=status, text=text, alert_id=alert_id))
     return out
 
 
