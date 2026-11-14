@@ -19,7 +19,7 @@ hr_sd_multiplier:
 hr_consecutive_readings:
   value: 3
   unit: readings
-  source: "Full Plan §9 (team decision)"
+  source: "Team decision"
   note: "Number of consecutive good-quality HR readings that must all be above baseline to flag R-HR-01."
 
 spo2_min:
