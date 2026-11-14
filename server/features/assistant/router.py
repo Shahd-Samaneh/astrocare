@@ -1,74 +1,49 @@
-"""Assistant API (owners: Marah + Noura).
+"""Assistant API (owner: Marah).
 
-Stub: returns a template answer. The real version will retrieve passages from
-/references (embeddings via local Ollama `nomic-embed-text`) and answer with the
-local `llama3.2:3b`. It must ALWAYS refuse medication / dosing questions and
-send them to the CMO (crew medical officer) and flight surgeon instead.
+POST /api/assistant/ask           { question } -> AssistantAnswer
+POST /api/assistant/ask/stream    { question } -> NDJSON events: token* [reset] final (see service.py)
+POST /api/assistant/warmup        load the local models into memory (best effort, background)
+GET  /api/assistant/permissions   -> AssistantPermissions
+PUT  /api/assistant/permissions   partial update, merged
+GET  /api/assistant/info          model, size, RAM, measured latency and tokens/s
+
+Answers come from references/ (indexed by `python -m server.features.assistant.ingest`)
+and the user's own data, through the local llama3.2:3b on Ollama (localhost only).
+Medication / dose / diagnosis questions are refused before the model is called.
 """
 from __future__ import annotations
 
-import re
-from typing import Optional
+import json
 
-import httpx
-from fastapi import APIRouter
-from pydantic import Field
+from fastapi import APIRouter, BackgroundTasks
+from fastapi.responses import StreamingResponse
 
-from server.core import db
-from server.core.config import app_config
-from server.core.models import ApiModel
-
-from .models import AssistantPermissions, PermissionsPatch
+from . import llm, store
+from .models import AskIn, AssistantAnswer, AssistantInfo, AssistantPermissions, PermissionsPatch
 from .permissions import get_permissions, set_permissions
+from .service import answer_events, answer_question
+from .settings import chat_model, ollama_cfg
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 
-DOSE_PATTERN = re.compile(r"\b(dose|dosage|doses|mg|milligram|mcg|how many (pills|tablets))\b", re.I)
-
-
-class AskIn(ApiModel):
-    question: str = Field(min_length=1, max_length=2000)
-
-
-class Source(ApiModel):
-    title: str
-    path: str
-    excerpt: Optional[str] = None
-
-
-class AskOut(ApiModel):
-    answer: str
-    sources: list[Source] = []
-    missing: list[str] = []
-    refused: bool = False
-    model: str
-
-
-def _mentions_medicine(q: str) -> bool:
-    if DOSE_PATTERN.search(q):
-        return True
-    ql = q.lower()
-    for r in db.query("resources", "kind = 'medicine'"):
-        first_word = r["name"].split(" ")[0].lower()  # "Ibuprofen tablets" -> "ibuprofen"
-        if first_word in ql:
-            return True
-    return False
-
 
 @router.post("/ask")
-def ask(body: AskIn) -> AskOut:
-    model = app_config()["ollama"]["chat_model"]
-    if _mentions_medicine(body.question):
-        return AskOut(
-            answer=("I can't help with medicines or doses. Please contact the CMO, who can review it "
-                    "with the flight surgeon during the next comm window."),
-            refused=True, model=model,
-        )
-    return AskOut(
-        answer=("(stub) This is a template answer. The real assistant will answer from the NASA "
-                "reference texts in /references and list its sources."),
-        sources=[], missing=["Reference texts not indexed yet"], refused=False, model=model,
-    )
+def ask(body: AskIn) -> AssistantAnswer:
+    return answer_question(body.question)
+
+
+@router.post("/ask/stream")
+def ask_stream(body: AskIn) -> StreamingResponse:
+    """Same flow as /ask, streamed: the first words show up as soon as the model writes them."""
+    lines = (json.dumps(ev, ensure_ascii=False) + "\n" for ev in answer_events(body.question))
+    return StreamingResponse(lines, media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+
+@router.post("/warmup", status_code=202)
+def warmup(tasks: BackgroundTasks) -> dict:
+    tasks.add_task(llm.warm_up)
+    return {"ok": True}
 
 
 @router.get("/permissions")
@@ -81,25 +56,34 @@ def update_permissions(body: PermissionsPatch) -> AssistantPermissions:
     return AssistantPermissions.model_validate(set_permissions(body.model_dump(exclude_none=True)))
 
 
-class AssistantInfo(ApiModel):
-    ollama_url: str
-    reachable: bool
-    chat_model: str
-    embed_model: str
-    models_available: list[str] = []
-
-
 @router.get("/info")
 def info() -> AssistantInfo:
-    cfg = app_config()["ollama"]
-    reachable, models = False, []
+    cfg = ollama_cfg()
+    reachable, models, size, ram = False, [], None, None
     try:  # localhost only: never an internet call
-        r = httpx.get(f"{cfg['url']}/api/tags", timeout=1.0)
-        reachable = r.status_code == 200
-        models = [m.get("name", "") for m in r.json().get("models", [])] if reachable else []
-    except (httpx.HTTPError, ValueError):
+        tags = llm.tags()
+        reachable = True
+        models = [m.get("name", "") for m in tags]
+        model = chat_model()
+        chat = next((m for m in tags if m.get("name") in (model, f"{model}:latest")), None)
+        size = chat.get("size") if chat else None
+        loaded = next((m for m in llm.running() if m.get("name") == (chat or {}).get("name")), None)
+        ram = loaded.get("size") if loaded else None  # memory used by the loaded chat model
+    except Exception:  # noqa: BLE001  Ollama off: report unreachable
         pass
+
+    # measured from our own log: only real model answers count
+    current = chat_model()
+    llm_rows = [r for r in store.log_rows(200) if r["mode"] == "llm" and r.get("model") in (None, current)]
+    avg_latency = round(sum(r["latency_ms"] for r in llm_rows) / len(llm_rows), 1) if llm_rows else None
+    timed = [r for r in llm_rows if r.get("eval_count") and r.get("eval_duration_ns")]
+    first = [r["first_token_ms"] for r in llm_rows if r.get("first_token_ms")]
+    avg_first = round(sum(first) / len(first), 1) if first else None
+    tps = (round(sum(r["eval_count"] for r in timed) / (sum(r["eval_duration_ns"] for r in timed) / 1e9), 1)
+           if timed else None)
+
     return AssistantInfo(
-        ollama_url=cfg["url"], reachable=reachable, chat_model=cfg["chat_model"],
-        embed_model=cfg["embed_model"], models_available=models,
+        ollama_url=cfg["url"], reachable=reachable, chat_model=chat_model(), embed_model=cfg["embed_model"],
+        models_available=models, model_size_bytes=size, ram_bytes=ram, avg_latency_ms=avg_latency, avg_first_token_ms=avg_first,
+        tokens_per_sec=tps, answers_logged=len(store.log_rows(10_000)), chunks_indexed=store.chunk_count(),
     )

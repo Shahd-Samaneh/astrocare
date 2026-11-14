@@ -66,6 +66,7 @@ class AssistantInfo(ApiModel):
     model_size_bytes: Optional[int] = None
     ram_bytes: Optional[int] = None
     avg_latency_ms: Optional[float] = None
+    avg_first_token_ms: Optional[float] = None
     tokens_per_sec: Optional[float] = None
     answers_logged: int = 0
     chunks_indexed: int = 0
