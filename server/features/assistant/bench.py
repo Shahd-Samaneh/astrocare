@@ -16,6 +16,8 @@ from pathlib import Path
 import httpx
 
 from . import llm
+from .context import build_context
+from .prompt import SYSTEM_PROMPT, user_data_prefix
 from .service import answer_events
 from .settings import ollama_cfg
 
@@ -38,6 +40,10 @@ def run(model: str) -> dict:
     t = time.perf_counter()
     llm.warm_up(model)
     load_s = round(time.perf_counter() - t, 1)
+    # same as the app at startup: cache the fixed system prompt + user-data block
+    t = time.perf_counter()
+    llm.prime(SYSTEM_PROMPT, user_data_prefix(build_context()), model=model)
+    prime_s = round(time.perf_counter() - t, 1)
     rows = []
     for q in QUESTIONS:
         t0 = time.perf_counter()
@@ -62,7 +68,7 @@ def run(model: str) -> dict:
         })
         print(f"[{model}] {q[:45]:45s} first={rows[-1]['firstShownS']}s total={rows[-1]['totalS']}s "
               f"tok/s={rows[-1]['tokensPerSec']} prompt_read={rows[-1]['promptTokensRead']}tok/{rows[-1]['promptReadS']}s mode={a['mode']} refused={a['refused']}", flush=True)
-    return {"model": model, "loadS": load_s, "rows": rows}
+    return {"model": model, "loadS": load_s, "primeS": prime_s, "rows": rows}
 
 
 def main(argv: list[str]) -> int:

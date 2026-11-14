@@ -65,10 +65,10 @@ Until then my `assistant/api.ts` uses `fetch('/api/...')` directly (relative pat
 
 ```yaml
 assistant_first_token_timeout_sec:
-  value: 20
+  value: 30
   unit: s
-  source: "AstroCare_Full_Plan.md §11 (team decision: fallback if the local model is slower than 20 s)"
-  note: "Time from the question to the first streamed token; with no token by then the assistant answers from the alert template. Also the longest allowed gap between two tokens."
+  source: "Team decision (demo latency), not clinical; replaces the 20 s in AstroCare_Full_Plan.md §11"
+  note: "Time from the question to the first streamed token; with no token by then the assistant answers from the alert template. Also the longest allowed gap between two tokens. Raised from 20 s: on the demo laptop a streamed answer can start at ~22 s, and that is better than a template at 20 s."
 
 assistant_max_answer_sec:
   value: 90
@@ -107,22 +107,32 @@ assistant_num_ctx:
   note: "Ollama context window for the chat model."
 
 assistant_slow_reply_ms:
-  value: 8000
+  value: 10000
   unit: ms
   source: "Team decision (UX), not clinical"
-  note: "The UI shows a 'still thinking' message after this."
+  note: "Before the first word, the UI shows 'Thinking on this device…'; after this it shows 'The local model is reading your data and the references…'."
 ```
 Until merged, `server/features/assistant/settings.py` reads these keys from `thresholds.yaml` and falls back to the same values.
 
 **Plan note (AstroCare_Full_Plan.md §11, "المساعد"):** the references are now split into passages of **~300 words
 with a 40-word overlap**, and the model gets the **top 3** (not ~500 words / top 4). Reason: on the demo laptop,
 reading a ~2,400-token prompt took most of the 20 s first-token budget. Measured result: see the benchmark in the
-PR description. Please update the plan line when you merge this.
+PR description. The same plan line says "fallback if slower than 20 s": that is now **30 s to the first token**
+(see `assistant_first_token_timeout_sec`). Please update the plan line when you merge this.
 
-**Also (no new keys):** every Ollama call sends `keep_alive: "60m"`, and the assistant router warms the chat and
-embed models once at server startup in a background thread (router `on_startup`, so `main.py` is unchanged;
-skipped under pytest or with `ASTROCARE_NO_WARMUP=1`). The system prompt is now identical on every call, with the
-answer language on a `LANGUAGE:` line just before the question, so Ollama can reuse the cached prompt prefix.
+**Also (no new keys):** every Ollama call sends `keep_alive: "60m"`. At server startup (router `on_startup`, so
+`main.py` is unchanged; skipped under pytest or with `ASTROCARE_NO_WARMUP=1`) and when the Assistant page opens
+(`POST /api/assistant/warmup`), a background thread loads the embed model and **primes the prompt cache**: it sends
+the exact fixed system prompt + the current user-data block and asks for one token, so the first real question
+only reads its passages and the question. The system prompt is identical on every call, with the answer language
+on a `LANGUAGE:` line just before the question.
+
+**Fixed facts (no new keys):** for sleep, attention, vital signs and exercise, the exact values (nights recorded,
+average/shortest/last night, nights under `sleep_short_hours`, latest attention median, lapses, which readings are
+up to date / stale / missing, exercise logged) are computed in code (`assistant/facts.py`) and shown to the model as
+`FIXED FACT:` lines it must not change. A sentence about the user's own data that contradicts one of them (e.g. "no
+lapses" when lapses > 0, or "stale" for fresh data) is replaced by the fact line, with its citation.
+`sleep_short_hours` is read from `config/thresholds.yaml`, where its `source` is still `TODO`.
 
 ### A6. Tables (created by my own code, not `core/db.TABLES`)
 

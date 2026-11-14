@@ -13,7 +13,7 @@ import type { AssistantAnswer } from './types';
 import styles from './AssistantPage.module.css';
 
 // After this long the UI says the local model is still working (proposal A5: assistant_slow_reply_ms).
-const SLOW_REPLY_MS = 8000;
+const SLOW_REPLY_MS = 10000;
 
 const READY_QUESTIONS = [
   'Why did I get the alert?',
@@ -137,7 +137,7 @@ export default function AssistantPage() {
                           <span />
                         </span>
                         {slow
-                          ? 'The local model is still reading your data. If it has not started writing within 20 seconds, a template answer is used.'
+                          ? 'The local model is reading your data and the references…'
                           : 'Thinking on this device…'}
                       </div>
                     )}

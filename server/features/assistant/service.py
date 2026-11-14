@@ -21,7 +21,7 @@ from . import llm, store
 from .context import build_context, latest_alert
 from .fallback import build_fallback
 from .models import AssistantAnswer, AssistantSource
-from .prompt import build_prompt, ensure_data_coverage, parse_answer
+from .prompt import SYSTEM_PROMPT, build_prompt, ensure_data_coverage, parse_answer, user_data_prefix
 from .retrieval import retrieve
 from .safety import check_question, is_arabic, medicine_terms, mentions_medicine_name, refusal_text
 from .settings import chat_model, setting
@@ -113,7 +113,7 @@ def answer_events(
                 out = _refusal(question, "medication", t0)
             else:
                 assert result is not None
-                parsed = ensure_data_coverage(parse_answer(result.text, prompt), prompt, ctx, question,
+                parsed = ensure_data_coverage(parse_answer(result.text, prompt, arabic=arabic), prompt, ctx, question,
                                               arabic=arabic)
                 missing = parsed.missing
                 if not result.complete:
@@ -155,3 +155,15 @@ def answer_question(question: str, **kw: Any) -> AssistantAnswer:
             final = ev
     assert final is not None
     return AssistantAnswer.model_validate(final["answer"])
+
+
+def prime_cache() -> bool:
+    """Startup / page-open warm-up: load the embed model, then load the chat model with the
+    exact fixed system prompt + current user-data block so Ollama caches that prefix.
+    Never raises (Ollama off, DB not ready, ...): returns False instead."""
+    try:
+        llm.embed(["warm up"], timeout=300.0)
+        ok = llm.prime(SYSTEM_PROMPT, user_data_prefix(build_context()))
+    except Exception:  # noqa: BLE001  best effort only
+        return False
+    return ok

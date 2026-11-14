@@ -24,7 +24,7 @@ from fastapi.responses import StreamingResponse
 from . import llm, store
 from .models import AskIn, AssistantAnswer, AssistantInfo, AssistantPermissions, PermissionsPatch
 from .permissions import get_permissions, set_permissions
-from .service import answer_events, answer_question
+from .service import answer_events, answer_question, prime_cache
 from .settings import chat_model, ollama_cfg
 
 
@@ -34,7 +34,7 @@ def _warm_up_in_background() -> None:
     with ASTROCARE_NO_WARMUP=1."""
     if "pytest" in sys.modules or os.environ.get("ASTROCARE_NO_WARMUP") == "1":
         return
-    threading.Thread(target=llm.warm_up, name="assistant-warmup", daemon=True).start()
+    threading.Thread(target=prime_cache, name="assistant-warmup", daemon=True).start()
 
 
 # Router-level startup hook: runs next to main.py's lifespan, so core/main.py stays untouched.
@@ -56,7 +56,7 @@ def ask_stream(body: AskIn) -> StreamingResponse:
 
 @router.post("/warmup", status_code=202)
 def warmup(tasks: BackgroundTasks) -> dict:
-    tasks.add_task(llm.warm_up)
+    tasks.add_task(prime_cache)
     return {"ok": True}
 
 

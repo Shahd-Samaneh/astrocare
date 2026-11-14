@@ -21,7 +21,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Callable
 
-from server.core.config import parse_ts, utcnow
+from server.core.config import parse_ts, threshold, utcnow
 
 from .permissions import get_permissions
 
@@ -157,8 +157,12 @@ def build_context(perms: dict | None = None) -> dict[str, Any]:
         nights = _within_days(raw.get("sleep") or [], "end")
         if nights:
             durs = [n["durationMin"] for n in nights]
+            short_h = threshold("sleep_short_hours")  # config/thresholds.yaml (needs its source filled in)
             ctx["sleep7d"] = {
                 "nights": len(nights),
+                "durationsMin": durs,
+                "shortHours": short_h,
+                "nightsUnderShort": sum(1 for d in durs if short_h is not None and d < short_h * 60),
                 "average": _hm(sum(durs) / len(durs)),
                 "shortest": _hm(min(durs)),
                 "lastNight": _hm(nights[-1]["durationMin"]) if nights else None,

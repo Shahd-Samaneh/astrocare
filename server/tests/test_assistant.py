@@ -257,7 +257,7 @@ def test_data_summary_adds_missing_sleep_and_attention(client, fake_chat, mock_c
     assert ids == ["user-data:vitals", "user-data:sleep", "user-data:attention"]
     assert "Sleep, last 7 days: 5 nights" in body["answer"] and "[2]" in body["answer"]
     assert "Attention tests, last 7 days: 2 tests" in body["answer"] and "[3]" in body["answer"]
-    assert "281 ms to 338 ms" in body["answer"]
+    assert "latest median reaction time 338 ms" in body["answer"]
 
 
 def test_data_summary_not_duplicated_when_model_covers_it(client, fake_chat, mock_ctx):
@@ -446,3 +446,110 @@ def test_chat_model_is_configurable(monkeypatch):
     assert chat_model() == "llama3.2:3b"
     monkeypatch.setenv("ASTROCARE_CHAT_MODEL", "llama3.2:1b")
     assert chat_model() == "llama3.2:1b"
+
+
+# ---- fixed facts ------------------------------------------------------------------------
+# mock data: 5 nights (430, 415, 320, 320, 320 min), 2 tests (281 ms, then 338 ms with 1 lapse),
+# heart rate / SpO2 / resp rate up to date, skin temperature stale, blood pressure missing.
+def test_fixed_facts_are_computed_in_code_and_shown_in_prompt(client, fake_chat, mock_ctx):
+    client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"})
+    _, user = fake_chat.calls[0]
+    assert ("FIXED FACT: Sleep, last 7 days: 5 nights recorded; average 6 h 01 m; shortest 5 h 20 m; "
+            "last night 5 h 20 m; 3 night(s) under 6 h.") in user
+    assert ("FIXED FACT: Attention tests, last 7 days: 2 tests; latest median reaction time 338 ms "
+            "(first test in the window: 281 ms); lapses in the latest test: 1; lapses over 7 days: 1.") in user
+    assert "FIXED FACT: Vital signs: up to date: heart rate, SpO₂, respiration rate; stale: skin temperature" in user
+    assert "missing today: blood pressure." in user
+
+
+@pytest.mark.parametrize("wrong, fact_start", [
+    ("Your attention tests show no lapses.", "Attention tests, last 7 days: 2 tests"),
+    ("Your latest median reaction time was 300 ms.", "Attention tests, last 7 days: 2 tests"),
+    ("Your sleep data is stale.", "Sleep, last 7 days: 5 nights"),
+    ("You slept an average of 7 hours and 30 minutes.", "Sleep, last 7 days: 5 nights"),
+    ("You had 1 night under 6 h this week.", "Sleep, last 7 days: 5 nights"),
+    ("Your heart rate data is stale.", "Vital signs: up to date: heart rate"),
+    ("Your skin temperature is up to date.", "Vital signs: up to date: heart rate"),
+])
+def test_contradicting_sentence_is_replaced_by_the_fact(client, fake_chat, mock_ctx, wrong, fact_start):
+    fake_chat.reply = f"Here is your summary. {wrong} Keep resting.\nMISSING: none"
+    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    assert wrong not in body["answer"]
+    assert fact_start in body["answer"]
+    assert "Here is your summary." in body["answer"] and "Keep resting." in body["answer"]
+    fact_ids = {s["id"] for s in body["sources"]}
+    assert fact_ids & {"user-data:sleep", "user-data:attention", "user-data:vitals"}  # fact line is cited
+
+
+@pytest.mark.parametrize("right", [
+    "Your latest median reaction time was 338 ms, up from 281 ms.",
+    "Your latest test had 1 lapse.",
+    "You slept 5 h 20 m last night, and 3 nights were under 6 h.",
+    "Your skin temperature reading is stale.",
+    "Your blood pressure is missing today.",
+    "NASA notes that astronauts often get less than 6 hours of sleep and have no lapses only when rested.",
+])
+def test_correct_or_reference_sentences_are_kept(client, fake_chat, mock_ctx, right):
+    fake_chat.reply = f"{right}\nMISSING: none"
+    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    assert right.rstrip(".") in body["answer"]
+
+
+def test_same_fact_is_written_only_once(client, fake_chat, mock_ctx):
+    fake_chat.reply = "Your attention tests show no lapses. Your latest test also had zero lapses.\nMISSING: none"
+    body = client.post("/api/assistant/ask", json={"question": "How is my attention?"}).json()
+    assert body["answer"].count("Attention tests, last 7 days") == 1
+
+
+def test_arabic_fact_replacement(client, fake_chat, mock_ctx):
+    fake_chat.reply = "نومك بيانات قديمة.\nMISSING: none"
+    body = client.post("/api/assistant/ask", json={"question": "شو بتبيّن بياناتي آخر 7 أيام؟"}).json()
+    assert "النوم، آخر 7 أيام: 5 ليالي مسجّلة" in body["answer"]
+
+
+# ---- cache priming ----------------------------------------------------------------------
+def test_prime_sends_the_exact_prefix_of_a_real_prompt(client, fake_chat, mock_ctx, monkeypatch):
+    sent: dict = {}
+
+    class Resp:
+        status_code = 200
+
+    def fake_post(url, json=None, timeout=None):
+        sent.setdefault(url.rsplit("/", 1)[-1], json)
+        return Resp()
+    monkeypatch.setattr(llm.httpx, "post", fake_post)
+    monkeypatch.setattr(llm, "embed", lambda texts, timeout=60.0: [[1.0]] * len(texts))
+    assert service.prime_cache() is True
+    primed = sent["chat"]
+    assert primed["options"]["num_predict"] == 1 and primed["keep_alive"] == "60m"
+    client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"})
+    system, user = fake_chat.calls[0]
+    assert primed["messages"][0]["content"] == system
+    assert user.startswith(primed["messages"][1]["content"])
+
+
+def test_prime_never_raises_when_ollama_is_off(monkeypatch, mock_ctx):
+    monkeypatch.setattr(llm, "ollama_cfg", lambda: {"url": "http://127.0.0.1:9", "chat_model": "x", "embed_model": "y"})
+    assert service.prime_cache() is False
+
+
+def test_first_token_timeout_is_30s():
+    from server.features.assistant.settings import setting
+    assert setting("assistant_first_token_timeout_sec") == 30
+
+
+def test_echoed_fixed_fact_gets_its_citation_and_loses_the_label(client, fake_chat, mock_ctx):
+    fake_chat.reply = ("Sleep loss is a spaceflight risk.\n\nFIXED FACT: Sleep, last 7 days: 5 nights recorded; "
+                       "average 6 h 01 m; shortest 5 h 20 m; last night 5 h 20 m; 3 night(s) under 6 h.\nMISSING: none")
+    body = client.post("/api/assistant/ask", json={"question": "How can sleep loss affect me?"}).json()
+    assert "FIXED FACT" not in body["answer"]
+    assert "3 night(s) under 6 h [1]." in body["answer"]
+    assert [s["id"] for s in body["sources"]] == ["user-data:sleep"]
+
+
+def test_you_have_slept_counts_as_citing_sleep(client, fake_chat, mock_ctx):
+    fake_chat.reply = ("Your data shows that you have slept 5 nights, with an average of 6 h 01 m. "
+                       "Your latest median reaction time was 338 ms.\nMISSING: none")
+    body = client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"}).json()
+    assert body["answer"].count("Sleep, last 7 days") == 0  # covered by the model's own cited sentence
+    assert {"user-data:sleep", "user-data:attention"} <= {s["id"] for s in body["sources"]}

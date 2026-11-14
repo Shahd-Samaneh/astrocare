@@ -12,6 +12,7 @@ import json
 import re
 from dataclasses import dataclass, field
 
+from .facts import SENTENCE, Fact, build_facts, contradicted_facts
 from .retrieval import Hit
 
 
@@ -28,6 +29,7 @@ class Prompt:
     system: str
     user: str
     sources: list[PromptSource] = field(default_factory=list)  # index i is cited as [i+1]
+    facts: dict[str, Fact] = field(default_factory=dict)      # fixed facts shown in the data blocks
 
 
 SYSTEM_PROMPT = """You are the AstroCare onboard health assistant for an astronaut on a deep-space mission with no link to Earth.
@@ -39,9 +41,10 @@ Rules (all mandatory):
 5. Talk about possible factors, never causes. Use the words "possible link, not a confirmed cause" when you connect data to a factor.
 6. If data is marked stale or missing, say that it is stale or missing.
 7. When the question is about the user's own data, cover every "Your data" source (vital signs, sleep, attention tests, exercise, check-ins) and cite each one; say so when a source has no data or is not shared.
-8. All data is simulated. Keep the answer short: at most 6 sentences.
-9. Write the answer in the language given on the LANGUAGE line.
-10. Finish with one last line, exactly in this form (the word MISSING stays in English):
+8. A line starting with "FIXED FACT:" holds exact values computed from the data. Use those numbers and words exactly as written, cite that source, and never contradict them (for example, do not say "no lapses" if the fact gives lapses, and do not call data stale unless the fact says stale).
+9. All data is simulated. Keep the answer short: at most 6 sentences.
+10. Write the answer in the language given on the LANGUAGE line.
+11. Finish with one last line, exactly in this form (the word MISSING stays in English):
 MISSING: <information you needed but did not find, separated by ";">
 or
 MISSING: none"""
@@ -66,21 +69,45 @@ def _compact(v: object) -> str:
     return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
 
 
-def _data_body(ctx: dict, key: str, not_shared_label: str) -> str:
+_FACT_FOR_SOURCE = {"user-data:sleep": "sleep", "user-data:attention": "attention",
+                    "user-data:vitals": "vitals", "user-data:exercise": "exercise"}
+
+
+def _data_body(ctx: dict, key: str, not_shared_label: str, fact: Fact | None) -> str:
     if not_shared_label in (ctx.get("notShared") or []):
         return NOT_SHARED
     v = ctx.get(key)
-    return _compact(v) if v else NO_DATA
+    if not v:
+        return NO_DATA
+    return (f"FIXED FACT: {fact.en}\nDATA: " if fact else "") + _compact(v)
 
 
-def build_prompt(question: str, ctx: dict, hits: list[Hit], *, arabic: bool) -> Prompt:
-    data_sources = [PromptSource(sid, title, None, _data_body(ctx, key, label))
+def _data_and_alert_sources(ctx: dict, facts: dict[str, Fact]) -> list[PromptSource]:
+    data_sources = [PromptSource(sid, title, None, _data_body(ctx, key, label, facts.get(_FACT_FOR_SOURCE.get(sid, ""))))
                     for sid, title, key, label in DATA_SOURCES]
     alert_sources = [
         PromptSource(f"alert:{a['id']}", f"Alert {a['ruleId']}: {a['title']}", None,
                      _compact({k: v for k, v in a.items() if k != "id"}))
         for a in ctx.get("alerts") or []
     ]
+    return data_sources + alert_sources
+
+
+def _block(n: int, s: PromptSource) -> str:
+    return f"[{n}] {s.title}\n{s.body}"
+
+
+def user_data_prefix(ctx: dict) -> str:
+    """The data + alerts part that starts every user message (identical for every question
+    while the data is unchanged). Startup priming sends exactly this, so it gets cached."""
+    fixed = _data_and_alert_sources(ctx, build_facts(ctx))
+    return ("YOUR DATA AND ALERTS (simulated):\n\n" + "\n\n".join(_block(i + 1, s) for i, s in enumerate(fixed))
+            + "\n\nREFERENCE PASSAGES:\n\n")
+
+
+def build_prompt(question: str, ctx: dict, hits: list[Hit], *, arabic: bool) -> Prompt:
+    facts = build_facts(ctx)
+    fixed = _data_and_alert_sources(ctx, facts)
     by_source: dict[str, PromptSource] = {}
     for h in hits:  # merge chunks of the same reference into one numbered source
         if h.source_id in by_source:
@@ -88,20 +115,14 @@ def build_prompt(question: str, ctx: dict, hits: list[Hit], *, arabic: bool) -> 
         else:
             by_source[h.source_id] = PromptSource(h.source_id, h.title, h.url, h.text)
     ref_sources = list(by_source.values())
-
-    sources = data_sources + alert_sources + ref_sources
-    num = {id(s): i + 1 for i, s in enumerate(sources)}
-
-    def block(s: PromptSource) -> str:
-        return f"[{num[id(s)]}] {s.title}\n{s.body}"
+    sources = fixed + ref_sources
 
     user = (
-        "YOUR DATA AND ALERTS (simulated):\n\n" + "\n\n".join(block(s) for s in data_sources + alert_sources)
-        + "\n\nREFERENCE PASSAGES:\n\n"
-        + ("\n\n".join(block(s) for s in ref_sources) if ref_sources else "(none found)")
+        user_data_prefix(ctx)
+        + ("\n\n".join(_block(len(fixed) + i + 1, s) for i, s in enumerate(ref_sources)) if ref_sources else "(none found)")
         + f"\n\nLANGUAGE: {'Arabic' if arabic else 'English'}\nQUESTION: {question}"
     )
-    return Prompt(system=SYSTEM_PROMPT, user=user, sources=sources)
+    return Prompt(system=SYSTEM_PROMPT, user=user, sources=sources, facts=facts)
 
 
 _MISSING_LINE = re.compile(r"^[ \t*_>-]*MISSING[*_]*\s*[:：][*_]*\s*(.*)$", re.I | re.M)
@@ -122,12 +143,11 @@ class Parsed:
 _DATA_PHRASES = {
     "user-data:vitals": r"your (vital signs?|vitals|heart rate|spo₂|spo2|blood pressure|skin temperature|respiration rate)"
                         r"|vital signs? data|حيوياتك|علاماتك الحيوية|نبضك",
-    "user-data:sleep": r"your sleep|sleep data|you slept|نومك|بيانات النوم",
+    "user-data:sleep": r"your sleep|sleep data|you (have |had )?slept|نومك|بيانات النوم",
     "user-data:attention": r"your (attention|reaction time|median reaction)|attention tests? (data|results)|اختبارات الانتباه تبعك|انتباهك",
     "user-data:exercise": r"your exercise|exercise data|تمرينك|بيانات التمرين",
     "user-data:checkins": r"your (check-?ins?|mood|stress)|check-?in data|مزاجك|توترك",
 }
-_SENTENCE = re.compile(r"[^.!?؟\n]+[.!?؟]?")
 
 
 def _cite_title_headings(text: str, prompt: Prompt) -> str:
@@ -165,12 +185,42 @@ def _cite_title_headings(text: str, prompt: Prompt) -> str:
             return sent[: end - 1] + tag + sent[end - 1:]
         return sent[:end] + tag + sent[end:]
 
-    return _SENTENCE.sub(cite_sentence, text) if matchers else text
+    return SENTENCE.sub(cite_sentence, text) if matchers else text
 
 
-def parse_answer(text: str, prompt: Prompt) -> Parsed:
-    """Split off the MISSING line, keep only valid citations and renumber them 1..n
-    in the order of the returned sources list."""
+def _enforce_facts(text: str, prompt: Prompt, *, arabic: bool) -> str:
+    """Replace each sentence about the user's data that contradicts a FIXED FACT with that
+    fact line (cited with the fact's source number in this prompt). A fact is written once;
+    later contradicting sentences are dropped."""
+    if not prompt.facts:
+        return text
+    num = {s.id: i + 1 for i, s in enumerate(prompt.sources)}
+    written: set[str] = set()
+
+    def fix(m: re.Match[str]) -> str:
+        sent = m.group(0)
+        bad = contradicted_facts(_CITE.sub("", sent), prompt.facts)
+        if not bad:
+            return sent
+        lead = re.match(r"^\s*(?:[-*•]\s+)?", sent).group(0)
+        tail = sent[len(sent.rstrip()):]
+        parts = []
+        for f in bad:
+            if f.key in written:
+                continue
+            written.add(f.key)
+            line = f.text(arabic)
+            cite = f" [{num[f.source_id]}]" if f.source_id in num else ""
+            parts.append(line[:-1] + cite + "." if line.endswith(".") else line + cite)
+        return (lead + " ".join(parts) + tail) if parts else tail
+
+    return SENTENCE.sub(fix, text)
+
+
+def parse_answer(text: str, prompt: Prompt, *, arabic: bool = False) -> Parsed:
+    """Split off the MISSING line, cite named sources, replace sentences that contradict a
+    fixed fact, keep only valid citations and renumber them 1..n in the order of the
+    returned sources list."""
     missing: list[str] = []
     matches = list(_MISSING_LINE.finditer(text))
     if matches:
@@ -179,7 +229,9 @@ def parse_answer(text: str, prompt: Prompt) -> Parsed:
         missing = [i for i in items if i and i.lower() not in _NONE]
         text = (text[: m.start()] + text[m.end():]).strip()
 
+    text = _cite_echoed_facts(text, prompt)
     text = _cite_title_headings(text, prompt)
+    text = _enforce_facts(text, prompt, arabic=arabic)
     order: list[int] = []  # 0-based prompt indexes, in first-cited order
     for m in _CITE.finditer(text):
         for n in m.group(1).split(","):
@@ -194,7 +246,8 @@ def parse_answer(text: str, prompt: Prompt) -> Parsed:
         return f"[{', '.join(nums)}]" if nums else ""
 
     text = _CITE.sub(_renumber, text)
-    text = re.sub(r"[ \t]+([.,;:])", r"\1", text).strip()
+    text = re.sub(r"[ \t]+([.,;:])", r"\1", text)
+    text = re.sub(r"[ \t]{2,}", " ", text).strip()
     return Parsed(answer=text, sources=[prompt.sources[i] for i in order], missing=missing)
 
 
@@ -204,50 +257,47 @@ _DATA_QUESTION = re.compile(
     r"|بياناتي|اخر 7 ايام|آخر 7 أيام|اخر سبع ايام|آخر سبع أيام|هالاسبوع|هذا الاسبوع|ملخص",
     re.I,
 )
-_LABELS = {
-    "en": {"sleep": "Sleep, last 7 days", "nights": "nights", "avg": "average", "short": "shortest",
-           "last": "last night", "awk": "awakenings per night", "att": "Attention tests, last 7 days",
-           "tests": "tests", "median": "median reaction time", "from": "from", "to": "to", "lapses": "lapses in the latest test"},
-    "ar": {"sleep": "النوم، آخر 7 أيام", "nights": "ليالي", "avg": "المعدل", "short": "أقصر ليلة",
-           "last": "الليلة الماضية", "awk": "مرات الاستيقاظ بالليلة", "att": "اختبارات الانتباه، آخر 7 أيام",
-           "tests": "اختبارات", "median": "متوسط زمن الاستجابة", "from": "من", "to": "إلى", "lapses": "الهفوات بآخر اختبار"},
-}
 
 
 def is_data_question(question: str) -> bool:
     return bool(_DATA_QUESTION.search(question))
 
 
-def _sleep_line(s: dict, L: dict) -> str:
-    return (f"{L['sleep']}: {s['nights']} {L['nights']}, {L['avg']} {s['average']}, {L['short']} {s['shortest']}, "
-            f"{L['last']} {s['lastNight']}, {s['avgAwakenings']} {L['awk']}")
-
-
-def _attention_line(tests: list[dict], L: dict) -> str:
-    first, last = tests[0], tests[-1]
-    return (f"{L['att']}: {len(tests)} {L['tests']}, {L['median']} {L['from']} {first['medianMs']:.0f} ms "
-            f"{L['to']} {last['medianMs']:.0f} ms, {L['lapses']}: {last['lapses']}")
-
-
 def ensure_data_coverage(parsed: Parsed, prompt: Prompt, ctx: dict, question: str, *, arabic: bool) -> Parsed:
-    """For a "my data" question, add a cited factual line for sleep and for attention when the
-    model left them out. Lines are built from the data only (no interpretation)."""
+    """For a "my data" question, add the fixed fact line for sleep and for attention when the
+    model left them out (cited). The lines come from the data only (no interpretation)."""
     if not is_data_question(question):
         return parsed
-    L = _LABELS["ar" if arabic else "en"]
     cited = {s.id for s in parsed.sources}
     by_id = {s.id: s for s in prompt.sources}
-    extra: list[tuple[str, PromptSource]] = []
-    sleep, tests = ctx.get("sleep7d"), ctx.get("attention7d")
-    if "user-data:sleep" not in cited and sleep and "sleep" not in (ctx.get("notShared") or []):
-        extra.append((_sleep_line(sleep, L), by_id["user-data:sleep"]))
-    if "user-data:attention" not in cited and tests and "attention tests" not in (ctx.get("notShared") or []):
-        extra.append((_attention_line(tests, L), by_id["user-data:attention"]))
+    extra = [prompt.facts[k] for k in ("sleep", "attention")
+             if k in prompt.facts and prompt.facts[k].source_id not in cited and prompt.facts[k].source_id in by_id]
     if not extra:
         return parsed
     sources = list(parsed.sources)
     lines = []
-    for text, src in extra:
-        sources.append(src)
-        lines.append(f"- {text} [{len(sources)}]")
+    for f in extra:
+        sources.append(by_id[f.source_id])
+        line = f.text(arabic)
+        lines.append(f"- {line[:-1] if line.endswith('.') else line} [{len(sources)}]")
     return Parsed(answer=parsed.answer.rstrip() + "\n\n" + "\n".join(lines), sources=sources, missing=parsed.missing)
+
+
+_FACT_LABEL = re.compile(r"\bFIXED FACTS?\s*:\s*", re.I)
+
+
+def _cite_echoed_facts(text: str, prompt: Prompt) -> str:
+    """The model sometimes copies a 'FIXED FACT: ...' line. Drop the label and cite the
+    fact's source (the line is exact, so it only needs its citation)."""
+    text = _FACT_LABEL.sub("", text)
+    num = {s.id: i + 1 for i, s in enumerate(prompt.sources)}
+    for f in prompt.facts.values():
+        body = f.en.rstrip(".")
+        i = text.find(body)
+        if i < 0 or f.source_id not in num:
+            continue
+        after = text[i + len(body):]
+        if _CITE.match(after.lstrip(" .")[:8] or ""):
+            continue
+        text = text[: i + len(body)] + f" [{num[f.source_id]}]" + after
+    return text

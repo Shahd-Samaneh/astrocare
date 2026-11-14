@@ -169,3 +169,16 @@ def warm_up(model: str | None = None) -> None:
         httpx.post(_url("/api/generate"), json={"model": model or chat_model(), "keep_alive": KEEP_ALIVE}, timeout=300.0)
     except httpx.HTTPError:
         pass
+
+
+def prime(system: str, user_prefix: str, *, model: str | None = None, timeout: float = 300.0) -> bool:
+    """Load the chat model AND fill Ollama's prompt cache with the fixed part of the prompt
+    (system rules + current user-data block), by asking for a single token. A real question
+    then only has to read its passages and the question. Best effort: False on any error."""
+    payload = _chat_payload(system, user_prefix, model or chat_model(), False)
+    payload["options"]["num_predict"] = 1
+    try:
+        r = httpx.post(_url("/api/chat"), json=payload, timeout=timeout)
+        return r.status_code == 200
+    except httpx.HTTPError:
+        return False
