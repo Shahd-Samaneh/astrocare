@@ -1,0 +1,328 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ok,
+.error {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  border: 1px solid;
+}
+.ok {
+  color: var(--ok);
+  border-color: var(--ok);
+  background: var(--bg-panel);
+}
+.error {
+  color: var(--danger-2);
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.simLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: normal;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.legend {
+  padding: 0 6px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.row2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ---- scene cards ---- */
+.scenes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.sceneCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 4px;
+  min-height: 120px;
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--border-strong);
+  cursor: pointer;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+}
+.sceneCard::before {
+  /* keeps the text readable on any background */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, var(--bg-app), transparent 70%);
+  opacity: 0.85;
+}
+.sceneCard > * {
+  position: relative;
+}
+.sceneCard:focus-within {
+  box-shadow: var(--focus-ring);
+}
+.sceneOn {
+  border-color: var(--accent);
+}
+
+.sceneName {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.sceneDesc {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+/* Local CSS gradients (no media files needed). Built from tokens only. */
+.gDefault {
+  background-image: linear-gradient(160deg, var(--bg-active), var(--bg-panel));
+}
+.g-earthrise {
+  background-image: radial-gradient(circle at 50% 110%, var(--accent) 0, var(--accent-2) 18%, var(--bg-app) 45%),
+    linear-gradient(var(--bg-app), var(--bg-nav));
+}
+.g-forest-stream {
+  background-image: linear-gradient(170deg, var(--ok), var(--bg-panel) 70%);
+}
+.g-ocean-shore {
+  background-image: linear-gradient(180deg, var(--accent-2), var(--accent) 40%, var(--bg-active) 100%);
+}
+.g-night-sky {
+  background-image: radial-gradient(circle at 20% 30%, var(--text) 0 1px, transparent 2px),
+    radial-gradient(circle at 70% 20%, var(--text-2) 0 1px, transparent 2px),
+    radial-gradient(circle at 45% 60%, var(--text) 0 1px, transparent 2px),
+    radial-gradient(circle at 85% 70%, var(--text-2) 0 1px, transparent 2px),
+    linear-gradient(var(--bg-app), var(--bg-active));
+}
+.g-rain-window {
+  background-image: repeating-linear-gradient(100deg, transparent 0 14px, var(--border-input) 14px 15px),
+    linear-gradient(180deg, var(--bg-active), var(--warn-bg));
+}
+.imageBg {
+  background-color: var(--bg-panel);
+}
+
+/* ---- pills (sound, length) ---- */
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pill,
+.scaleBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-min);
+  min-width: var(--tap-min);
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-input);
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.pill:hover,
+.scaleBtn:hover {
+  background: var(--bg-panel);
+}
+.pill:focus-within,
+.scaleBtn:focus-within {
+  box-shadow: var(--focus-ring);
+}
+.pillOn,
+.scaleOn {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.pillOn:hover,
+.scaleOn:hover {
+  background: var(--accent);
+}
+
+/* ---- stress scale 1–10 ---- */
+.scale {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(var(--tap-min), 1fr));
+  gap: 6px;
+}
+.scaleBtn {
+  padding: 0;
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+}
+
+.scaleEnds {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* ---- full-screen session ---- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+  background-size: cover;
+  background-position: center;
+  text-align: center;
+}
+.overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bg-app);
+  opacity: 0.35;
+}
+.overlay > * {
+  position: relative;
+}
+
+.breath {
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  border: 2px solid var(--text);
+  background: var(--bg-active);
+  opacity: 0.6;
+  animation: breathe 10s ease-in-out infinite; /* 5 s in, 5 s out */
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(0.6);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+.overlayScene {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.timer {
+  font-family: var(--font-mono);
+  font-size: 64px;
+  color: var(--text);
+  line-height: 1;
+}
+
+.overlayHint {
+  font-size: 15px;
+  color: var(--text-2);
+  max-width: 480px;
+}
+
+/* ---- history ---- */
+.history {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.histRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.histRow:first-child {
+  border-top: none;
+}
+
+.histIcon {
+  color: var(--ok);
+  flex-shrink: 0;
+}
+
+.histMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.histStress {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .scale {
+    grid-template-columns: repeat(5, minmax(var(--tap-min), 1fr));
+  }
+  .timer {
+    font-size: 48px;
+  }
+}
