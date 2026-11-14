@@ -16,11 +16,23 @@ hr_sd_multiplier:
   source: "Team decision: personal baseline mean ± k·SD"
   note: "Heart rate outside baseline mean ± k·SD is flagged for review."
 
+hr_consecutive_readings:
+  value: 3
+  unit: readings
+  source: "Team decision"
+  note: "Number of consecutive good-quality HR readings that must all be above baseline to flag R-HR-01."
+
 spo2_min:
   value: 92
   unit: "%"
-  source: "TODO"
-  note: "verify source (commonly cited lower bound for healthy adults; confirm against a NASA/clinical reference)."
+  source: "Experimental value (no NASA source)"
+  note: "Commonly cited lower bound for healthy adults; not yet confirmed against a NASA/clinical reference. Treat as experimental."
+
+spo2_low_minutes:
+  value: 5
+  unit: min
+  source: "Team decision"
+  note: "A low SpO2 episode must span at least this long (first low reading to the latest) before R-SPO2-01 fires."
 
 sleep_short_hours:
   value: 6
@@ -41,7 +53,101 @@ pvt_lapse_ms:
   note: "Reaction times above this count as lapses."
 
 co2_max:
-  value: null
+  value: 3
   unit: mmHg
-  source: "TODO"
-  note: "must come from a NASA source before the demo"
+  source: "NASA-STD-3001 Vol. 2 [V2 6004], via NASA OCHMO Technical Brief TB-004 Carbon Dioxide"
+  note: "Limit on the 1-hour average ppCO2 in the habitable volume. https://www.nasa.gov/wp-content/uploads/2023/12/ochmo-tb-004-carbon-dioxide.pdf"
+
+co2_avg_window_minutes:
+  value: 60
+  unit: min
+  source: "NASA-STD-3001 Vol. 2 [V2 6004] (1-hour average)"
+  note: "Window over which cabin co2 is averaged before comparing with co2_max."
+
+cabin_temp_min:
+  value: 20
+  unit: "°C"
+  source: "NASA-STD-3001 Vol. 2 [V2 6013] Crew Performance Environmental Zone, via NASA OCHMO TB-002 ECLSS"
+  note: "Lower bound of the usual cabin temperature range."
+
+cabin_temp_max:
+  value: 25
+  unit: "°C"
+  source: "NASA-STD-3001 Vol. 2 [V2 6013] Crew Performance Environmental Zone, via NASA OCHMO TB-002 ECLSS"
+  note: "Upper bound of the usual cabin temperature range."
+
+humidity_min:
+  value: 30
+  unit: "%"
+  source: "NASA-STD-3001 Vol. 2 [V2 6013] Crew Performance Environmental Zone, via NASA OCHMO TB-002 ECLSS"
+  note: "Lower bound of the usual cabin relative-humidity range."
+
+humidity_max:
+  value: 60
+  unit: "%"
+  source: "NASA-STD-3001 Vol. 2 [V2 6013] Crew Performance Environmental Zone, via NASA OCHMO TB-002 ECLSS"
+  note: "Upper bound of the usual cabin relative-humidity range."
+
+noise_sd_multiplier:
+  value: 2
+  unit: SD
+  source: "Team decision (no NASA noise limit in this source)"
+  note: "Cabin noise outside baseline mean ± k·SD of the last noise_baseline_days is flagged."
+
+noise_baseline_days:
+  value: 7
+  unit: d
+  source: "Team decision"
+  note: "Look-back window for the cabin noise baseline (mean and SD)."
+
+# ---- Daily pair (Shahd + Nadia) ---------------------------------------------
+# Read by server/features/daily/attention_stats.py::daily_threshold(). The group
+# itself has value/source/note so the flat core loader (and its "every threshold
+# has a source" test) treats it as one entry. Haya: see docs/proposals/daily-contracts.md §6.
+daily:
+  value: null
+  unit: ""
+  source: "Group of Daily thresholds (each key below has its own source)"
+  note: "Nested keys are read by the Daily feature, not by core/config.thresholds()."
+
+  sleep_short_hours:
+    value: 6
+    unit: h
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value"
+
+  sleep_short_nights:
+    value: 2
+    unit: nights
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. Counted over the last 3 nights."
+
+  attention_slower_pct:
+    value: 15
+    unit: "%"
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. Routine-test median in the last 48 h vs personal baseline."
+
+  attention_baseline_n:
+    value: 7
+    unit: tests
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. Routine tests before the last 48 h used for the baseline."
+
+  pvt_lapse_ms:
+    value: 500
+    unit: ms
+    source: "Psychomotor Vigilance Test convention"
+    note: "standard PVT lapse definition (reaction time ≥ 500 ms)"
+
+  sleep_onset_shift_hours:
+    value: 2
+    unit: h
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. Largest difference between bedtimes over the last 3 nights (R-CIRC-01)."
+
+  exercise_missed_days:
+    value: 2
+    unit: days
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. Used by Nadia's R-EX-01."

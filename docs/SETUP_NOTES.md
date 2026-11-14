@@ -1,6 +1,6 @@
 # Setup notes
 
-Scaffold generated on 2026-11-11 on Windows 11 (Node 24.21, npm 11, Python 3.14.7).
+The team set up the scaffold on 2026-11-11 on Windows 11 (Node 24.21, npm 11, Python 3.14.7).
 
 ## Summary
 
@@ -9,7 +9,7 @@ Scaffold generated on 2026-11-11 on Windows 11 (Node 24.21, npm 11, Python 3.14.
 - Backend: FastAPI + Pydantic v2 + SQLite (`sqlite3`). There are 14 contract tables, a simulator with the demo scenario, a rule engine with one example rule, and working stubs for every endpoint in the brief.
 - Tests: 21 pytest tests and `tsc --noEmit` pass. `npm run build` passes. `npm run check:offline` finds 0 remote URLs.
 - Ollama: installed on this machine (not on PATH). `nomic-embed-text` and `llama3.2:3b` were pulled (see below).
-- No git repository was created. That is for the team at the hackathon (see CONTRIBUTING.md).
+- The scaffold started without a git repository. We decided to create it together at the hackathon (see CONTRIBUTING.md).
 
 ## Verification results
 
@@ -25,7 +25,7 @@ Scaffold generated on 2026-11-11 on Windows 11 (Node 24.21, npm 11, Python 3.14.
 ## Decisions
 
 - **D1 Hand-written Vite project, not `npm create vite`.** The current template uses React 19, and the brief asks for React 18. `app/package.json` pins `react@^18.3.1`, `react-router-dom@^6`, `recharts@^2`, `vite@^6`, `typescript@~5.7`. The file layout is the same as the template's.
-- **D2 Python versions.** `requirements.txt` pins major versions (`fastapi<1`, `pydantic>=2.7,<3`, `numpy>=2,<3`, `pandas>=2.2,<4`, `reportlab>=4,<5`, `httpx<1`, `pytest>=8,<10`, ...). On Python 3.14 pip installed pandas 3.1 and pytest 9.2. I widened pandas to `<4` because pandas 2.x has no wheels for newer Pythons.
+- **D2 Python versions.** `requirements.txt` pins major versions (`fastapi<1`, `pydantic>=2.7,<3`, `numpy>=2,<3`, `pandas>=2.2,<4`, `reportlab>=4,<5`, `httpx<1`, `pytest>=8,<10`, ...). On Python 3.14 pip installed pandas 3.1 and pytest 9.2. We widened pandas to `<4` because pandas 2.x has no wheels for newer Pythons.
 - **D3 Cross-platform runner.** `scripts/py.mjs` runs the root `.venv`'s Python on any OS, so the root npm scripts (`dev`, `start`, `test`, `reseed`) work on Windows, macOS and Linux. `npm run setup` runs `scripts/setup.mjs`. `setup.sh` and `setup.ps1` are standalone copies of the same steps.
 - **D4 snake_case ↔ camelCase.** Pydantic models use snake_case (the same as the DB columns) with a camelCase alias generator, so the JSON matches `contracts.ts` exactly. Request bodies accept either spelling. `NextStep.lockedForCMO` has an explicit alias.
 - **D5 Small additions to the contract.** Untyped items in the brief were given shapes:
@@ -84,7 +84,7 @@ Scaffold generated on 2026-11-11 on Windows 11 (Node 24.21, npm 11, Python 3.14.
 ## Skipped or failed
 
 - Nothing was skipped. No prerequisites were missing.
-- One mid-run fix: blood pressure first showed as `good`, because the check used a 24-hour look-back. It now uses the mission-day start, and a test covers it.
+- One fix during setup: blood pressure first showed as `good`, because the check used a 24-hour look-back. It now uses the mission-day start, and a test covers it.
 - Browser check not done (optional). Components compile and the routes exist, but nobody has looked at the UI in a browser yet.
 - npm warned that esbuild's `postinstall` script was not run (npm's install-scripts policy). The build works anyway, because the platform binary `@esbuild/win32-x64` was installed. If `vite build` ever fails on a teammate's machine with an esbuild error, run `npm install-scripts approve esbuild` (or `npm rebuild esbuild`) inside `app/`.
 
