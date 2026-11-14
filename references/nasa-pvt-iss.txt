@@ -1,0 +1,25 @@
+title: Psychomotor Vigilance Test (PVT) on ISS
+url: https://techport.nasa.gov/projects/23201
+id: nasa-pvt-iss
+
+Project dates: 2008-08-01 to 2017-12-31
+
+Description:
+The Psychomotor Vigilance (PVT) Self Test (operational name on International Space Station (ISS) is Reaction Self Test (RST)) is intended to provide astronauts in spaceflight with objective feedback on neurobehavioral changes in vigilant attention, psychomotor speed, state stability, and impulsivity while on ISS missions, as well as recording their subjective ratings of workload, sleep timing and quality, tiredness, fatigue, and stress. The PVT Self Test is suited for repeated use in spaceflight because unlike other cognitive tests, it is very brief (less than 5 minutes) while being free of learning effects and aptitude differences that make interpretation of other cognitive measures difficult.
+
+Our initial Reaction Self Test study evaluated 24 astronauts, before, during, and after 6-month missions on the International Space Station (ISS). A total of 2,856 RST evaluations were obtained from 21 astronauts participating in 6-month ISS missions.
+
+To determine whether there were continuing changes in Reaction Self Test outcomes for ISS missions greater than 6-month duration, a study was conducted on the RST outcomes of N=2 participants in the initial 1-year mission (i.e., one US astronaut and one Russian cosmonaut). The following are the objectives (specific aims) of the project for the 1-year mission. The US astronaut and Russian cosmonaut were evaluated within the 1-year mission, and relative to data from the N=21 astronauts in 6-month missions.
+
+1) Evaluate whether there were changes in sleep duration and/or sleep quality within the 1-year mission (i.e., first 6 months compared to the second 6 months of the 1-year mission), and differences in these outcomes between the 1-year and 6-month missions.
+
+2) Evaluate whether there were changes in psychomotor speed, performance lapses, and premature responses on the Brief Psychomotor Vigilance Test (PVT-B) within the 1-year mission (i.e., first 6 months compared to the second 6 months of the 1-year mission), and differences in these outcomes between the 1-year and 6-month missions.
+
+3) Evaluate whether there were changes in subjective ratings of sleepiness, fatigue, tiredness, physical exhaustion, workload, and stress within the 1-year mission (i.e., first 6 months compared to the second 6 months of the 1-year mission), and differences in these outcomes between the 1-year and 6-month missions.
+
+4) To investigate changes in the intake of caffeine and medications within the 1-year mission (i.e., first 6 months compared to the second 6 months of the 1-year mission), and differences in these outcomes between the 1-year and 6-month missions.
+
+Benefits:
+The Principal Investigator (PI) developed the original 10-minute Psychomotor Vigilance Test (PVT), from which the Reaction Self Test was derived, to measure changes in psychomotor speed, lapses of attention, wake state instability, and impulsivity induced by fatigue and other performance-degrading factors commonly found in operational environments. Based on research supported by federal and non-US federal agencies, as well as the pharmaceutical industry, the 10-minute PVT has been extensively validated in laboratory studies, simulators, and operational environments to be sensitive to a variety of performance-degrading fatigue-related factors. There are currently more than 200 published peer-review papers on the sensitivity of the 10-min. PVT to fatigue-related factors.
+
+The Reaction Self Test is a 3-minute PVT Self Test that contains special timing and algorithm characteristics and that has been validated against the 10-minute PVT. The 3-minute Reaction Self Test will have utility in a wide array of safety-sensitive environments on Earth. Potentially any occupation in which alertness and fatigue management are essential to prevent errors on critical tasks will benefit from adaptations of the PVT SelfTest technology (e.g., certain military personnel, airport security screeners, physicians on night shifts and prolonged call).

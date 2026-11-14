@@ -54,12 +54,14 @@ def test_posts_accept_camel_case(client):
     assert client.post("/api/relax/sessions", json={
         "sceneId": "ocean-shore", "audioMode": "nature", "durationMin": 10, "stressBefore": 4,
     }).status_code == 201
-    assert client.post("/api/reports", json={"sections": [{"id": "s1", "title": "Note"}]}).json()["status"] == "draft"
+    assert client.post("/api/reports", json={"sections": ["summary"], "itemIds": []}).json()["status"] == "ready"
 
 
-def test_assistant_refuses_medication_questions(client):
+def test_assistant_refuses_medication_questions(client, monkeypatch):
+    from server.features.assistant import llm
+    monkeypatch.setattr(llm, "ollama_cfg", lambda: {"url": "http://127.0.0.1:9", "chat_model": "x", "embed_model": "y"})
     assert client.post("/api/assistant/ask", json={"question": "What dose of ibuprofen?"}).json()["refused"] is True
     assert client.post("/api/assistant/ask", json={"question": "Can I take 200 mg?"}).json()["refused"] is True
     ok = client.post("/api/assistant/ask", json={"question": "How does microgravity affect sleep?"}).json()
     assert ok["refused"] is False
-    assert ok["sources"] == []
+    assert ok["mode"] == "fallback"  # Ollama pointed at a dead port in tests

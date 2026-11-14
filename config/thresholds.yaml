@@ -41,10 +41,52 @@ pvt_lapse_ms:
   note: "Reaction times above this count as lapses."
 
 co2_max:
-  value: null
+  value: 3
   unit: mmHg
-  source: "TODO"
-  note: "must come from a NASA source before the demo"
+  source: "NASA-STD-3001 Vol. 2 [V2 6004], via NASA OCHMO Technical Brief TB-004 Carbon Dioxide"
+  note: "Limit on the 1-hour average ppCO2 in the habitable volume. https://www.nasa.gov/wp-content/uploads/2023/12/ochmo-tb-004-carbon-dioxide.pdf"
+
+co2_avg_window_minutes:
+  value: 60
+  unit: min
+  source: "NASA-STD-3001 Vol. 2 [V2 6004] (1-hour average)"
+  note: "Window over which cabin co2 is averaged before comparing with co2_max."
+
+cabin_temp_min:
+  value: 20
+  unit: "°C"
+  source: "NASA-STD-3001 Vol. 2 [V2 6013] Crew Performance Environmental Zone, via NASA OCHMO TB-002 ECLSS"
+  note: "Lower bound of the usual cabin temperature range."
+
+cabin_temp_max:
+  value: 25
+  unit: "°C"
+  source: "NASA-STD-3001 Vol. 2 [V2 6013] Crew Performance Environmental Zone, via NASA OCHMO TB-002 ECLSS"
+  note: "Upper bound of the usual cabin temperature range."
+
+humidity_min:
+  value: 30
+  unit: "%"
+  source: "NASA-STD-3001 Vol. 2 [V2 6013] Crew Performance Environmental Zone, via NASA OCHMO TB-002 ECLSS"
+  note: "Lower bound of the usual cabin relative-humidity range."
+
+humidity_max:
+  value: 60
+  unit: "%"
+  source: "NASA-STD-3001 Vol. 2 [V2 6013] Crew Performance Environmental Zone, via NASA OCHMO TB-002 ECLSS"
+  note: "Upper bound of the usual cabin relative-humidity range."
+
+noise_sd_multiplier:
+  value: 2
+  unit: SD
+  source: "Team decision (no NASA noise limit in this source)"
+  note: "Cabin noise outside baseline mean ± k·SD of the last noise_baseline_days is flagged."
+
+noise_baseline_days:
+  value: 7
+  unit: d
+  source: "Team decision"
+  note: "Look-back window for the cabin noise baseline (mean and SD)."
 
 # ---- Daily pair (Shahd + Nadia) ---------------------------------------------
 # Read by server/features/daily/attention_stats.py::daily_threshold(). The group
