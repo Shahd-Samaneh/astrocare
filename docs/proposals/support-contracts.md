@@ -341,3 +341,22 @@ POST /api/reports/{id}/queue              -> ready -> queued (409 if not ready, 
 - `checkins` only if `get_permissions()["report"]["checkins"]` (Marah's); otherwise "Not included: permission required". `notePrivate` is never copied.
 - Proposal: add `sentTs?: string | null` to `Report` (from the `comms_windows` log).
 - ⚠️ `server/tests/test_health.py::test_posts_accept_camel_case`: one line updated to the new body (`{"sections": ["summary"], "itemIds": []}` → `ready`). Haya, please check.
+
+
+### N6. Relax: stress 1–10 + scene media (contracts §7, plan §11)
+
+The plan asks for stress **1–10**; `RelaxSession` in `models.py` still has `ge=1, le=5`.
+Proposal: `stress_before: int = Field(ge=1, le=10)`, `stress_after: Optional[int] = Field(default=None, ge=1, le=10)` (contracts.ts unchanged, it's `number`).
+Until merged, `server/features/relax/router.py` uses a local `RelaxSessionOut` with 1–10.
+
+**Live now:**
+```
+GET   /api/relax/scenes            -> Scene[] { id, name, description, audio[], image?, audioFiles{nature?, music?} }
+GET   /api/relax/sessions?n=
+POST  /api/relax/sessions          { sceneId, audioMode, durationMin: 3|5|10, stressBefore }  // saved at START
+PATCH /api/relax/sessions/{id}     { stressAfter }                                            // added at the end
+GET   /api/relax/media/{path}      // local files from /media only (path traversal blocked)
+```
+An interrupted session stays saved without `stressAfter` (plan §11 test case).
+Media convention: `media/scenes/<scene-id>.webp|jpg`, `media/audio/<scene-id>-nature.mp3`, `media/audio/music-*.mp3`. Without files the UI uses local CSS gradients.
+`shared/api/client.ts`: `patch` would also help (same as A4/N3).

@@ -5,5 +5,6 @@
 export { default as ReportsPage } from './reports/ReportsPage';
 export * as reportsApi from './reports/api';
 export type { ReportItem, ReportItemKind, SectionId, CommsStatus } from './reports/types';
+export { default as RelaxPage } from './relax/RelaxPage';
 
 // ---- Marah ----
