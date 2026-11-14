@@ -206,8 +206,9 @@ def build_context(perms: dict | None = None) -> dict[str, Any]:
 
 
 def latest_alert(ctx: dict | None = None) -> dict | None:
-    """The newest open alert, as the raw contract dict (for the template fallback)."""
+    """The alert the template fallback explains: the highest-level open alert (urgent > review >
+    info), newest first among equals. Raw contract dict."""
+    from .fallback import pick_alert
+
     raw, _ = load_raw({"alerts"})
-    alerts = [a for a in (raw.get("alerts") or []) if a.get("status") != "closed"] or (raw.get("alerts") or [])
-    alerts.sort(key=lambda a: a.get("ts") or "", reverse=True)
-    return alerts[0] if alerts else None
+    return pick_alert(raw.get("alerts") or [])

@@ -62,7 +62,7 @@ def run(model: str) -> dict:
             "modelFirstTokenS": round(st["firstTokenMs"] / 1000, 1) if st.get("firstTokenMs") else None,
             "firstShownS": round(first_shown, 1) if first_shown else None,
             "totalS": round(total, 1), "tokensPerSec": round(tps, 1) if tps else None,
-            "tokens": st.get("evalCount"),
+            "tokens": st.get("evalCount"), "citationCheck": st.get("citationCheck"),
             "promptTokensRead": st.get("promptEvalCount"), "promptReadS": round(st["promptEvalMs"] / 1000, 1) if st.get("promptEvalMs") else None,
             "answer": a["answer"], "sources": [s["title"] for s in a["sources"]], "missing": a["missing"],
         })

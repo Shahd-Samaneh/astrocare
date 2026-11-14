@@ -19,6 +19,7 @@ class Hit:
     url: str | None
     text: str
     score: float
+    embedding: list[float] | None = None  # the passage vector (used to check citations)
 
 
 def top_k(query_vec: list[float], chunks: list[dict], k: int) -> list[Hit]:
@@ -32,7 +33,7 @@ def top_k(query_vec: list[float], chunks: list[dict], k: int) -> list[Hit]:
     scores = (m @ q) / np.where(denom == 0, 1.0, denom)
     order = np.argsort(-scores)[:k]
     return [Hit(chunks[i]["id"], chunks[i]["source_id"], chunks[i]["title"], chunks[i]["url"],
-                chunks[i]["text"], float(scores[i])) for i in order]
+                chunks[i]["text"], float(scores[i]), chunks[i]["embedding"]) for i in order]
 
 
 def retrieve(question: str, k: int | None = None) -> list[Hit]:

@@ -12,6 +12,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .arabic import ar_n
+
 METRIC_NAMES = {
     "heart_rate": ("heart rate", "معدل النبض"),
     "spo2": ("SpO₂", "تشبع الأكسجين"),
@@ -64,12 +66,12 @@ def build_facts(ctx: dict) -> dict[str, Fact]:
         under = s.get("nightsUnderShort")
         short_h = s.get("shortHours")
         under_en = f"; {under} night(s) under {short_h:g} h" if under is not None and short_h else ""
-        under_ar = f"؛ {under} ليالي أقل من {short_h:g} ساعات" if under is not None and short_h else ""
+        under_ar = f"؛ {ar_n(under, 'night')} أقل من {ar_n(short_h, 'hour')}" if under is not None and short_h else ""
         facts["sleep"] = Fact(
             "sleep", "user-data:sleep",
             en=(f"Sleep, last 7 days: {s['nights']} nights recorded; average {s['average']}; "
                 f"shortest {s['shortest']}; last night {s['lastNight']}{under_en}."),
-            ar=(f"النوم، آخر 7 أيام: {s['nights']} ليالي مسجّلة؛ المعدل {s['average']}؛ "
+            ar=(f"النوم، آخر 7 أيام: {ar_n(s['nights'], 'night')} مسجّلة؛ المعدل {s['average']}؛ "
                 f"أقصر ليلة {s['shortest']}؛ الليلة الماضية {s['lastNight']}{under_ar}."),
             data={"durations": durs, "nightsUnder": under, "shortHours": short_h},
         )
@@ -83,7 +85,7 @@ def build_facts(ctx: dict) -> dict[str, Fact]:
             en=(f"Attention tests, last 7 days: {len(tests)} tests; latest median reaction time "
                 f"{last['medianMs']:.0f} ms (first test in the window: {first['medianMs']:.0f} ms); "
                 f"lapses in the latest test: {last.get('lapses') or 0}; lapses over 7 days: {total_lapses}."),
-            ar=(f"اختبارات الانتباه، آخر 7 أيام: {len(tests)} اختبارات؛ آخر متوسط زمن استجابة "
+            ar=(f"اختبارات الانتباه، آخر 7 أيام: {ar_n(len(tests), 'test')}؛ آخر متوسط زمن استجابة "
                 f"{last['medianMs']:.0f} ms (أول اختبار بالفترة: {first['medianMs']:.0f} ms)؛ "
                 f"الهفوات بآخر اختبار: {last.get('lapses') or 0}؛ الهفوات خلال 7 أيام: {total_lapses}."),
             data={"medians": [float(t["medianMs"]) for t in tests if t.get("medianMs") is not None],
@@ -133,7 +135,8 @@ _ABOUT_USER = re.compile(r"\b(you|your|latest|last night|this week|averag\w*|rec
 _SLEEP = re.compile(r"\bsleep\w*|\bslept\b|\bnights?\b|نوم|ليال|ليلة", re.I)
 _ATTN = re.compile(r"attention|reaction time|lapses?|\bPVT\b|انتباه|استجابة|هفو", re.I)
 _STALE_WORDS = re.compile(r"\bstale\b|outdated|out of date|not (been )?updated|no recent (data|readings?)|قديم", re.I)
-_FRESH_WORDS = re.compile(r"\b(up to date|up-to-date|fresh|current|recent)\b|محدّث|محدث", re.I)
+# "no recent data" / "not up to date" say stale, not fresh: negated forms don't count
+_FRESH_WORDS = re.compile(r"(?<!\bno )(?<!\bnot )(?<!\bno new )\b(up to date|up-to-date|fresh|current|recent)\b|محدّث|محدث", re.I)
 _MISSING_WORDS = re.compile(r"\bmissing\b|no reading|ناقص", re.I)
 _NO_LAPSES = re.compile(r"\bno (attention )?lapses?\b|without (any )?lapses?|zero lapses?|0 lapses?|"
                         r"ما في هفوات|بدون هفوات|لا يوجد هفوات|لا هفوات", re.I)

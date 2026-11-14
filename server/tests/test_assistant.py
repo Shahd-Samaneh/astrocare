@@ -264,14 +264,15 @@ def test_data_summary_not_duplicated_when_model_covers_it(client, fake_chat, moc
     fake_chat.reply = lambda user: (f"You slept 5 h 20 m on average [{_num(user, 'Your data: sleep')}] and your "
                                     f"attention was slower [{_num(user, 'Your data: attention')}].\nMISSING: none")
     body = client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"}).json()
-    assert "Sleep, last 7 days" not in body["answer"] and len(body["sources"]) == 2
+    assert "Sleep, last 7 days" not in body["answer"] and "Attention tests, last 7 days" not in body["answer"]
+    assert [s["id"] for s in body["sources"]] == ["user-data:sleep", "user-data:attention", "user-data:vitals"]
 
 
 def test_title_heading_counts_as_citation(client, fake_chat, mock_ctx):
     fake_chat.reply = ("Your data: sleep (7 days)\nYou slept about 5 h 20 m on the last nights.\n\n"
                        "**Your data: attention tests (7 days)**\nThe latest test was slower.\nMISSING: none")
     body = client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"}).json()
-    assert [s["id"] for s in body["sources"]] == ["user-data:sleep", "user-data:attention"]
+    assert [s["id"] for s in body["sources"]] == ["user-data:sleep", "user-data:attention", "user-data:vitals"]
     assert "Sleep, last 7 days" not in body["answer"]  # covered: nothing appended
     assert "Your data: sleep (7 days) [1]" in body["answer"]
 
@@ -553,3 +554,189 @@ def test_you_have_slept_counts_as_citing_sleep(client, fake_chat, mock_ctx):
     body = client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"}).json()
     assert body["answer"].count("Sleep, last 7 days") == 0  # covered by the model's own cited sentence
     assert {"user-data:sleep", "user-data:attention"} <= {s["id"] for s in body["sources"]}
+
+
+# ---- template fallback fixes ---------------------------------------------------------
+def test_fallback_says_too_slow_vs_not_available(client, monkeypatch, mock_ctx):
+    monkeypatch.setattr(service, "retrieve", lambda q, k=None: [REF_HIT])
+
+    def slow(*_a, **_k):
+        raise llm.FirstTokenTimeout("no first token")
+        yield  # pragma: no cover
+    monkeypatch.setattr(service.llm, "chat_stream", slow)
+    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    assert "taking too long" in body["answer"] and "was too slow" in body["missing"][0]
+
+    def off(*_a, **_k):
+        raise llm.OllamaError("connection refused")
+        yield  # pragma: no cover
+    monkeypatch.setattr(service.llm, "chat_stream", off)
+    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    assert "not available" in body["answer"] and "unavailable" in body["missing"][0]
+
+
+def test_fallback_picks_highest_level_open_alert():
+    from server.features.assistant.fallback import pick_alert
+    alerts = [
+        {"id": "a1", "level": "info", "ts": "2026-11-14T10:00:00Z", "status": "new"},
+        {"id": "a2", "level": "review", "ts": "2026-11-13T10:00:00Z", "status": "new"},       # R-FAT-01 style
+        {"id": "a3", "level": "urgent", "ts": "2026-11-12T10:00:00Z", "status": "closed"},    # closed: skipped
+        {"id": "a4", "level": "review", "ts": "2026-11-12T09:00:00Z", "status": "ack"},
+    ]
+    assert pick_alert(alerts)["id"] == "a2"
+
+
+def test_fallback_has_no_duplicate_missing_items_or_sources(client):
+    from server.features.assistant.fallback import build_fallback
+    alert = {"id": "x", "ruleId": "R-T", "title": "T", "whatChanged": "w", "dataUsed": ["r1", "r2", "r3"],
+             "missing": ["BP: no reading", "bp: no reading.", "SpO2 stale"], "possibleFactors": ["f", "f"],
+             "nextSteps": [], "sources": ["note A", "note A"], "level": "review", "status": "new"}
+    answer, sources, missing = build_fallback(alert, arabic=False)
+    assert missing[1:] == ["BP: no reading", "SpO2 stale"]          # deduped, once
+    assert "BP: no reading" not in answer                            # not repeated in the text
+    assert answer.count("[1]") == 1
+    assert [s.title for s in sources] == ["Alert R-T: T", "note A"]  # each source once
+
+
+def test_arabic_plurals():
+    from server.features.assistant.arabic import ar_n
+    from server.features.assistant.fallback import build_fallback
+    assert [ar_n(n, "night") for n in (1, 2, 3, 10, 11)] == ["ليلة واحدة", "ليلتين", "3 ليالي", "10 ليالي", "11 ليلة"]
+    alert = {"id": "x", "ruleId": "R", "title": "T", "whatChanged": "w", "dataUsed": ["a", "b"], "missing": [],
+             "possibleFactors": [], "nextSteps": [], "sources": []}
+    assert "قراءتين" in build_fallback(alert, arabic=True)[0]
+
+
+# ---- cause wording ---------------------------------------------------------------------
+@pytest.mark.parametrize("wrong, banned", [
+    ("Your alert was caused by the disconnected patch.", "caused by"),
+    ("Your sleep is short because of cabin noise.", "because of"),
+    ("Your attention was slower due to short sleep.", "due to"),
+    ("The cause of your alert is the disconnected sensor.", "cause of"),
+    ("These are mentioned in the reference passage as possible causes for the alert.", "possible causes"),
+])
+def test_cause_wording_about_user_data_is_softened(client, fake_chat, mock_ctx, wrong, banned):
+    fake_chat.reply = f"{wrong}\nMISSING: none"
+    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    assert banned not in body["answer"].lower()
+    assert "a possible link, not a confirmed cause" in body["answer"]
+
+
+def test_arabic_cause_wording_is_softened(client, fake_chat, mock_ctx):
+    fake_chat.reply = "نومك قليل بسبب الضجة.\nMISSING: none"
+    body = client.post("/api/assistant/ask", json={"question": "ليش طلعلي التنبيه؟"}).json()
+    assert "بسبب" not in body["answer"] and "ارتباط محتمل، مش سبب مؤكد" in body["answer"]
+
+
+def test_reference_cause_sentence_and_correct_wording_are_kept():
+    from server.features.assistant.wording import soften_causes
+    ref = "Space radiation causes DNA damage in cells."
+    assert soften_causes(ref, set(), arabic=False) == ref  # not about the user's data
+    ok = "Your short sleep is a possible factor (a possible link, not a confirmed cause)."
+    assert soften_causes(ok, set(), arabic=False) == ok     # already right: unchanged, no double tag
+
+
+# ---- weak citations ----------------------------------------------------------------------
+def _sources_with_vectors():
+    from server.features.assistant.prompt import PromptSource
+    return [
+        PromptSource("user-data:sleep", "Your data: sleep (7 days)", None, "{}"),
+        PromptSource("nasa-hrp-sleep-risk", "Sleep risk", None, "...", vectors=[[1.0, 0.0, 0.0]]),
+        PromptSource("csa-bio-monitor", "Bio-Monitor", None, "...", vectors=[[0.0, 1.0, 0.0]]),
+    ]
+
+
+def test_supported_citation_is_kept_and_unsupported_is_dropped():
+    from server.features.assistant.citecheck import check_citations
+    text = ("Sleep loss leads to errors on tasks [2]. "
+            "Patch disconnection is a common factor for alerts in general [3]. "
+            "You slept 5 h last night [1].")
+    vecs = {"Sleep loss": [0.95, 0.05, 0.0], "Patch": [0.1, 0.1, 0.99]}  # 1: like the sleep passage; 2: like neither
+
+    def fake_embed(texts):
+        return [next(v for k, v in vecs.items() if k in t) for t in texts]
+    out, report = check_citations(text, _sources_with_vectors(), fake_embed, 0.775, arabic=False)
+    assert "Sleep loss leads to errors on tasks [2]." in out                      # supported: kept
+    assert "[3]" not in out and "in general (general information)." in out       # dropped + marked general
+    assert "You slept 5 h last night [1]." in out                                  # user data: never checked
+    assert [r["kept"] for r in report] == [True, False]
+
+
+def test_user_data_sentence_losing_reference_citation_is_not_marked_general():
+    from server.features.assistant.citecheck import check_citations
+    out, _ = check_citations("Your sleep was short last week [3].", _sources_with_vectors(),
+                             lambda texts: [[0.0, 0.0, 1.0]] * len(texts), 0.775, arabic=False)
+    assert "[3]" not in out and "general information" not in out
+
+
+def test_citation_check_never_fails_the_answer():
+    from server.features.assistant.citecheck import check_citations
+
+    def boom(texts):
+        raise llm.OllamaError("off")
+    text = "Sleep loss leads to errors [2]."
+    assert check_citations(text, _sources_with_vectors(), boom, 0.775, arabic=False)[0] == text
+
+
+def test_citation_check_runs_in_the_ask_flow(client, fake_chat, mock_ctx, monkeypatch):
+    hit = Hit(id="nasa-hrp-sleep-risk:0", source_id="nasa-hrp-sleep-risk", title="Sleep risk (NASA HRP)",
+              url=None, text="Astronauts commonly experience sleep deprivation.", score=0.8, embedding=[1.0, 0.0])
+    monkeypatch.setattr(service, "retrieve", lambda q, k=None: [hit])
+    monkeypatch.setattr(service, "_embed_for_check", lambda texts: [[0.0, 1.0]] * len(texts))  # unsupported
+    fake_chat.reply = lambda user: f"Bone loss is 2% per month [{_num(user, 'Sleep risk')}].\nMISSING: none"
+    body = client.post("/api/assistant/ask", json={"question": "How much bone do astronauts lose?"}).json()
+    assert body["answer"] == "Bone loss is 2% per month (general information)."
+    assert body["sources"] == []
+
+
+# ---- token caps ------------------------------------------------------------------------
+def test_summary_questions_get_250_tokens_others_200(client, mock_ctx, monkeypatch):
+    seen = []
+
+    def capture(system, user, **kw):
+        seen.append(kw.get("max_tokens"))
+        yield llm.ChatResult(text="ok [1].\nMISSING: none")
+    monkeypatch.setattr(service.llm, "chat_stream", capture)
+    monkeypatch.setattr(service, "retrieve", lambda q, k=None: [REF_HIT])
+    client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"})
+    client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"})
+    assert seen == [250, 200]
+
+
+def test_dropped_citation_takes_its_joining_word_with_it():
+    from server.features.assistant.citecheck import check_citations
+    sources = _sources_with_vectors()
+    out, _ = check_citations("These factors are in the passages [3] and [1].", sources,
+                             lambda texts: [[0.0, 0.0, 1.0]] * len(texts), 0.775, arabic=False)
+    assert out == "These factors are in the passages [1]."
+
+
+def test_echoed_raw_data_line_is_removed(client, fake_chat, mock_ctx):
+    fake_chat.reply = ('Your sleep was short [2].\n\nDATA: {"nights":5,"durationsMin":[430,415]}\nMISSING: none')
+    body = client.post("/api/assistant/ask", json={"question": "How is my sleep?"}).json()
+    assert "DATA:" not in body["answer"] and "durationsMin" not in body["answer"]
+
+
+def test_summary_adds_vitals_and_drops_false_missing_area(client, fake_chat, mock_ctx):
+    fake_chat.reply = lambda user: (
+        f"You slept 6 h 01 m on average [{_num(user, 'Your data: sleep')}]. "
+        f"Your latest median reaction time was 338 ms [{_num(user, 'Your data: attention')}].\n"
+        "MISSING: your vital signs data for the last 7 days; blood pressure reading today")
+    body = client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"}).json()
+    assert "Vital signs: up to date: heart rate" in body["answer"]
+    assert body["missing"] == ["blood pressure reading today"]  # the false "vital signs missing" is gone
+
+
+def test_no_recent_data_is_not_read_as_fresh(client, fake_chat, mock_ctx):
+    fake_chat.reply = "Your skin temperature has no recent data.\nMISSING: none"  # mock: skin temp is stale
+    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    assert "Your skin temperature has no recent data" in body["answer"]
+    assert "Vital signs: up to date" not in body["answer"]
+
+
+def test_sentence_quoting_alert_factors_cites_the_alert(client, fake_chat, mock_ctx):
+    fake_chat.reply = ("The possible factors listed include several short nights in a row and a shifted work "
+                       "schedule.\nMISSING: none")
+    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    assert [s["id"] for s in body["sources"]] == ["alert:al-mock-fat01"]
+    assert body["answer"].endswith("schedule [1].")

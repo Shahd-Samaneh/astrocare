@@ -100,6 +100,18 @@ assistant_max_answer_tokens:
   source: "Team decision (latency), not clinical"
   note: "Upper bound on the local model's answer length (keeps the reply inside the timeout)."
 
+assistant_max_summary_tokens:
+  value: 250
+  unit: tokens
+  source: "Team decision (latency), not clinical"
+  note: "Answer length cap for 'my data' summary questions (they cover 5 data areas); other questions use assistant_max_answer_tokens."
+
+assistant_citation_min_similarity:
+  value: 0.775
+  unit: cosine
+  source: "Calibrated on benchmark answers (2026-11-14): 10 supported sentence/passage pairs scored 0.783–0.929, 9 unsupported pairs 0.607–0.767; value = midpoint"
+  note: "nomic-embed-text cosine between an answer sentence and its cited reference passage; below it the citation is dropped (user data and alert citations are never dropped). Small margin: re-calibrate if the references or the embed model change."
+
 assistant_num_ctx:
   value: 4096
   unit: tokens
@@ -183,3 +195,13 @@ characters so the output safety check sees a whole medicine name or dose before 
 `ASTROCARE_CHAT_MODEL` (env var) overrides `config/app.yaml` → `ollama.chat_model` (default `llama3.2:3b`).
 If the team picks `llama3.2:1b` for the demo, the change is one line in `app.yaml` (Haya), and
 `setup` scripts should also `ollama pull` that model.
+
+### A11. Answer post-processing (no contract change)
+
+Every model answer goes through, in order: cite echoed facts and named sources → replace sentences that contradict a
+fixed fact → **soften cause wording** about the user's data ("caused by", "because of", "due to", "cause(s)", "سبب",
+"بسبب" → "possible factor" / "possibly linked to", plus "(a possible link, not a confirmed cause)") → **weak-citation
+check** (`assistant_citation_min_similarity`; an uncited general sentence gets "(general information)") → renumber
+citations. The template fallback says whether the model was **too slow** or **not available**, explains the
+**highest-level open alert** (urgent > review > info, newest first), lists missing data once, cites [1] once, lists each
+source once, and uses correct Arabic plurals.

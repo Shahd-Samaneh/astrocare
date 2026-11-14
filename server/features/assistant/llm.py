@@ -79,6 +79,7 @@ def chat_stream(
     model: str | None = None,
     first_token_timeout: float | None = None,
     max_total_sec: float | None = None,
+    max_tokens: int | None = None,
 ) -> Iterator[StreamItem]:
     """Stream one chat turn. Yields each token (str) as it arrives, then one final ChatResult.
 
@@ -96,8 +97,11 @@ def chat_stream(
     complete = True
     # read timeout = max wait for the next chunk; the first chunk only comes with the first token
     timeout = httpx.Timeout(connect=3.0, read=first_timeout, write=10.0, pool=3.0)
+    payload = _chat_payload(system, user, model, True)
+    if max_tokens:
+        payload["options"]["num_predict"] = int(max_tokens)
     try:
-        with httpx.stream("POST", _url("/api/chat"), json=_chat_payload(system, user, model, True), timeout=timeout) as r:
+        with httpx.stream("POST", _url("/api/chat"), json=payload, timeout=timeout) as r:
             if r.status_code != 200:
                 r.read()
                 raise OllamaError(f"chat failed: HTTP {r.status_code} {r.text[:200]}")

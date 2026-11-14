@@ -12,8 +12,10 @@ import json
 import re
 from dataclasses import dataclass, field
 
+from .citecheck import EmbedFn, check_citations
 from .facts import SENTENCE, Fact, build_facts, contradicted_facts
 from .retrieval import Hit
+from .wording import soften_causes
 
 
 @dataclass
@@ -22,6 +24,11 @@ class PromptSource:
     title: str
     url: str | None
     body: str
+    vectors: list[list[float]] = field(default_factory=list)  # reference passages only (citation check)
+
+    @property
+    def is_reference(self) -> bool:
+        return not (self.id.startswith("user-data:") or self.id.startswith("alert:"))
 
 
 @dataclass
@@ -114,6 +121,8 @@ def build_prompt(question: str, ctx: dict, hits: list[Hit], *, arabic: bool) -> 
             by_source[h.source_id].body += "\n...\n" + h.text
         else:
             by_source[h.source_id] = PromptSource(h.source_id, h.title, h.url, h.text)
+        if h.embedding:
+            by_source[h.source_id].vectors.append(h.embedding)
     ref_sources = list(by_source.values())
     sources = fixed + ref_sources
 
@@ -135,6 +144,7 @@ class Parsed:
     answer: str
     sources: list[PromptSource]
     missing: list[str]
+    citation_report: list[dict] = field(default_factory=list)  # weak-citation check scores
 
 
 # Phrases that name one "Your data" area in a sentence (English + Arabic).
@@ -148,6 +158,16 @@ _DATA_PHRASES = {
     "user-data:exercise": r"your exercise|exercise data|تمرينك|بيانات التمرين",
     "user-data:checkins": r"your (check-?ins?|mood|stress)|check-?in data|مزاجك|توترك",
 }
+
+
+def _alert_phrases(body: str) -> list[str]:
+    """Distinctive phrases of an alert (its possible factors and what-changed text, 12+ chars)."""
+    try:
+        a = json.loads(body)
+    except ValueError:
+        return []
+    items = list(a.get("possibleFactors") or []) + [a.get("whatChanged") or ""]
+    return [p.strip().rstrip(".") for p in items if len(p.strip()) >= 12]
 
 
 def _cite_title_headings(text: str, prompt: Prompt) -> str:
@@ -168,7 +188,9 @@ def _cite_title_headings(text: str, prompt: Prompt) -> str:
     for i, s in enumerate(prompt.sources):
         if s.id.startswith("alert:"):
             alert_title = s.title.split(": ", 1)[1] if ": " in s.title else s.title
-            matchers.append((i + 1, re.compile(re.escape(alert_title), re.I)))
+            # the title, or the alert's own wording (a possible factor, what changed) quoted in the sentence
+            phrases = [alert_title] + _alert_phrases(s.body)
+            matchers.append((i + 1, re.compile("|".join(re.escape(p) for p in phrases), re.I)))
         elif s.id in _DATA_PHRASES and s.body not in (NOT_SHARED, NO_DATA):
             matchers.append((i + 1, re.compile(rf"\b({_DATA_PHRASES[s.id]})", re.I)))
 
@@ -217,10 +239,12 @@ def _enforce_facts(text: str, prompt: Prompt, *, arabic: bool) -> str:
     return SENTENCE.sub(fix, text)
 
 
-def parse_answer(text: str, prompt: Prompt, *, arabic: bool = False) -> Parsed:
+def parse_answer(text: str, prompt: Prompt, *, arabic: bool = False,
+                 embed_fn: EmbedFn | None = None, min_similarity: float | None = None) -> Parsed:
     """Split off the MISSING line, cite named sources, replace sentences that contradict a
-    fixed fact, keep only valid citations and renumber them 1..n in the order of the
-    returned sources list."""
+    fixed fact, soften cause wording about the user's data, drop reference citations the
+    passage doesn't support (when embed_fn is given), keep only valid citations and
+    renumber them 1..n in the order of the returned sources list."""
     missing: list[str] = []
     matches = list(_MISSING_LINE.finditer(text))
     if matches:
@@ -232,6 +256,11 @@ def parse_answer(text: str, prompt: Prompt, *, arabic: bool = False) -> Parsed:
     text = _cite_echoed_facts(text, prompt)
     text = _cite_title_headings(text, prompt)
     text = _enforce_facts(text, prompt, arabic=arabic)
+    user_nums = {i + 1 for i, s in enumerate(prompt.sources) if not s.is_reference}
+    text = soften_causes(text, user_nums, arabic=arabic)
+    report: list[dict] = []
+    if embed_fn is not None and min_similarity is not None:
+        text, report = check_citations(text, prompt.sources, embed_fn, float(min_similarity), arabic=arabic)
     order: list[int] = []  # 0-based prompt indexes, in first-cited order
     for m in _CITE.finditer(text):
         for n in m.group(1).split(","):
@@ -248,7 +277,7 @@ def parse_answer(text: str, prompt: Prompt, *, arabic: bool = False) -> Parsed:
     text = _CITE.sub(_renumber, text)
     text = re.sub(r"[ \t]+([.,;:])", r"\1", text)
     text = re.sub(r"[ \t]{2,}", " ", text).strip()
-    return Parsed(answer=text, sources=[prompt.sources[i] for i in order], missing=missing)
+    return Parsed(answer=text, sources=[prompt.sources[i] for i in order], missing=missing, citation_report=report)
 
 
 # ---- "my data" questions: always cover sleep and attention --------------------------------
@@ -264,32 +293,60 @@ def is_data_question(question: str) -> bool:
 
 
 def ensure_data_coverage(parsed: Parsed, prompt: Prompt, ctx: dict, question: str, *, arabic: bool) -> Parsed:
-    """For a "my data" question, add the fixed fact line for sleep and for attention when the
-    model left them out (cited). The lines come from the data only (no interpretation)."""
+    """For a "my data" question, add the fixed fact line for sleep, attention and vital signs
+    when the model left them out (cited), and drop "missing" items that claim a whole data area
+    we do have. The lines come from the data only (no interpretation)."""
     if not is_data_question(question):
         return parsed
+    missing = _drop_false_missing(parsed.missing, prompt.facts)
     cited = {s.id for s in parsed.sources}
     by_id = {s.id: s for s in prompt.sources}
-    extra = [prompt.facts[k] for k in ("sleep", "attention")
+    extra = [prompt.facts[k] for k in ("sleep", "attention", "vitals")
              if k in prompt.facts and prompt.facts[k].source_id not in cited and prompt.facts[k].source_id in by_id]
     if not extra:
-        return parsed
+        return Parsed(answer=parsed.answer, sources=parsed.sources, missing=missing,
+                      citation_report=parsed.citation_report)
     sources = list(parsed.sources)
     lines = []
     for f in extra:
         sources.append(by_id[f.source_id])
         line = f.text(arabic)
         lines.append(f"- {line[:-1] if line.endswith('.') else line} [{len(sources)}]")
-    return Parsed(answer=parsed.answer.rstrip() + "\n\n" + "\n".join(lines), sources=sources, missing=parsed.missing)
+    return Parsed(answer=parsed.answer.rstrip() + "\n\n" + "\n".join(lines), sources=sources, missing=missing,
+                  citation_report=parsed.citation_report)
+
+
+# a "missing" item that names a whole data area (not one reading)
+_AREA_IN_MISSING = {
+    "vitals": re.compile(r"vital signs?|vitals|العلامات الحيوية|الحيويات", re.I),
+    "sleep": re.compile(r"\bsleep\b|النوم", re.I),
+    "attention": re.compile(r"attention|الانتباه", re.I),
+    "exercise": re.compile(r"exercise|التمرين", re.I),
+}
+_SPECIFIC_READING = re.compile(r"blood pressure|\bbp\b|ضغط", re.I)
+
+
+def _drop_false_missing(missing: list[str], facts: dict) -> list[str]:
+    """Drop a missing item that says a whole data area is missing when a fixed fact for that
+    area exists. Items about a single reading (e.g. blood pressure today) are kept."""
+    out = []
+    for item in missing:
+        area = next((k for k, pat in _AREA_IN_MISSING.items() if pat.search(item)), None)
+        if area and area in facts and not _SPECIFIC_READING.search(item):
+            continue
+        out.append(item)
+    return out
 
 
 _FACT_LABEL = re.compile(r"\bFIXED FACTS?\s*:\s*", re.I)
+_ECHOED_DATA = re.compile(r"^[ \t*_>-]*DATA:\s*[\[{].*$\n?", re.M)
 
 
 def _cite_echoed_facts(text: str, prompt: Prompt) -> str:
     """The model sometimes copies a 'FIXED FACT: ...' line. Drop the label and cite the
     fact's source (the line is exact, so it only needs its citation)."""
     text = _FACT_LABEL.sub("", text)
+    text = _ECHOED_DATA.sub("", text)  # a copied raw "DATA: {...}" line from the prompt
     num = {s.id: i + 1 for i, s in enumerate(prompt.sources)}
     for f in prompt.facts.values():
         body = f.en.rstrip(".")

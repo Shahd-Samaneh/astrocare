@@ -19,9 +19,9 @@ from typing import Any, Iterator
 
 from . import llm, store
 from .context import build_context, latest_alert
-from .fallback import build_fallback
+from .fallback import build_fallback, dedupe
 from .models import AssistantAnswer, AssistantSource
-from .prompt import SYSTEM_PROMPT, build_prompt, ensure_data_coverage, parse_answer, user_data_prefix
+from .prompt import SYSTEM_PROMPT, build_prompt, ensure_data_coverage, is_data_question, parse_answer, user_data_prefix
 from .retrieval import retrieve
 from .safety import check_question, is_arabic, medicine_terms, mentions_medicine_name, refusal_text
 from .settings import chat_model, setting
@@ -40,6 +40,11 @@ _INCOMPLETE = {
 
 def _answer_mentions_medicine(text: str, terms: set[str]) -> bool:
     return bool(_DOSE_IN_ANSWER.search(text)) or mentions_medicine_name(text, terms)
+
+
+def _embed_for_check(texts: list[str]) -> list[list[float]]:
+    """Embeddings for the weak-citation check (short timeout: the check is skipped on failure)."""
+    return llm.embed(texts, timeout=10.0)
 
 
 def _ms(t0: float) -> int:
@@ -80,6 +85,7 @@ def answer_events(
     first_timeout = float(first_token_timeout if first_token_timeout is not None
                           else setting("assistant_first_token_timeout_sec"))
     result: llm.ChatResult | None = None
+    citation_report: list[dict] = []
     out: AssistantAnswer
 
     reason = check_question(question, terms)
@@ -93,8 +99,11 @@ def answer_events(
             # the first-token deadline counts from the question, so retrieval time is included
             remaining = max(first_timeout - (time.perf_counter() - t0), 1.0)
             full, shown, blocked = "", 0, False
-            for item in llm.chat_stream(prompt.system, prompt.user, model=model,
-                                        first_token_timeout=remaining, max_total_sec=max_total_sec):
+            # "my data" summaries need room for every data area; other answers stay shorter
+            max_tokens = int(setting("assistant_max_summary_tokens" if is_data_question(question)
+                                     else "assistant_max_answer_tokens"))
+            for item in llm.chat_stream(prompt.system, prompt.user, model=model, first_token_timeout=remaining,
+                                        max_total_sec=max_total_sec, max_tokens=max_tokens):
                 if isinstance(item, llm.ChatResult):
                     result = item
                     break
@@ -113,8 +122,10 @@ def answer_events(
                 out = _refusal(question, "medication", t0)
             else:
                 assert result is not None
-                parsed = ensure_data_coverage(parse_answer(result.text, prompt, arabic=arabic), prompt, ctx, question,
-                                              arabic=arabic)
+                parsed = parse_answer(result.text, prompt, arabic=arabic, embed_fn=_embed_for_check,
+                                      min_similarity=float(setting("assistant_citation_min_similarity")))
+                citation_report = parsed.citation_report
+                parsed = ensure_data_coverage(parsed, prompt, ctx, question, arabic=arabic)
                 missing = parsed.missing
                 if not result.complete:
                     # a cut-off answer can only have a cut-off MISSING line: don't trust its items
@@ -122,10 +133,11 @@ def answer_events(
                 out = AssistantAnswer(
                     answer=parsed.answer,
                     sources=[AssistantSource(id=s.id, title=s.title, url=s.url) for s in parsed.sources],
-                    missing=missing, refused=False, mode="llm", latency_ms=_ms(t0),
+                    missing=dedupe(missing), refused=False, mode="llm", latency_ms=_ms(t0),
                 )
-        except llm.OllamaError:  # Ollama off, error, or no first token in time
-            answer, sources, missing = build_fallback(latest_alert(), arabic=arabic)
+        except llm.OllamaError as e:  # Ollama off, error, or no first token in time
+            reason = "slow" if isinstance(e, llm.FirstTokenTimeout) else "unavailable"
+            answer, sources, missing = build_fallback(latest_alert(), arabic=arabic, reason=reason)
             out = AssistantAnswer(answer=answer, sources=sources, missing=missing, refused=False,
                                   mode="fallback", latency_ms=_ms(t0))
 
@@ -143,6 +155,7 @@ def answer_events(
             "evalDurationNs": result.eval_duration_ns if result else None,
             "promptEvalCount": result.prompt_eval_count if result else None,
             "promptEvalMs": result.prompt_eval_ms if result else None,
+            "citationCheck": citation_report,  # cosine per (sentence, cited passage); dropped if kept=False
         },
     }
 
