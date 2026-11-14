@@ -11,7 +11,7 @@ import { Button, Card, PageHeader } from '../../../shared/components';
 import type { Alert } from '../../../shared/types/contracts';
 import { warmUpAssistant } from './api';
 import { askQuestion, clearChat, getChat, markReported, useChat, type Turn } from './chatStore';
-import { HEALTH_NOTE, isArabic, MODEL_STATUS_TEXT, modelStatus, showsHealthNote, type ModelStatus } from './chatView';
+import { EMPTY_STATE, HEALTH_NOTE, isArabic, MODEL_STATUS_TEXT, modelStatus, showsHealthNote, type ModelStatus } from './chatView';
 import { AnswerText } from './components/AnswerText';
 import { CmoButton } from './components/CmoButton';
 import { ModeBadge } from './components/ModeBadge';
@@ -32,7 +32,8 @@ export default function AssistantPage() {
   const [params, setParams] = useSearchParams();
   const askedFromUrl = useRef<string | null>(null);
   const { data: alerts } = useApi<Alert[]>('/alerts', { refreshMs: 60000 });
-  const chips = readyQuestions(alerts, uiLang());
+  const lang = uiLang();
+  const chips = readyQuestions(alerts, lang);
   // one /assistant/info read, shared by the header pill and the "Local model" panel
   const info = useApi<AssistantInfo>('/assistant/info');
   const reloadInfo = info.reload;
@@ -90,7 +91,7 @@ export default function AssistantPage() {
 
       <div className={styles.layout}>
         <Card
-          title="Assistant"
+          title="Ask about your data"
           subtitle="Explains your data using references stored on this device"
           className={styles.chatCard}
           actions={
@@ -112,7 +113,11 @@ export default function AssistantPage() {
         >
           <div className={styles.log} role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversation">
             {turns.length === 0 && (
-              <p className={styles.empty}>Pick a question below or type your own. You can ask in English or Arabic.</p>
+              <div className={styles.empty} lang={lang} dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+                {EMPTY_STATE[lang].map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
+              </div>
             )}
             {turns.map((t) => (
               <TurnView key={t.id} turn={t} slow={slow} />
