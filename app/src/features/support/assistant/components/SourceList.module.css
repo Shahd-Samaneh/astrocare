@@ -1,0 +1,51 @@
+.wrap {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.heading {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.item {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.num {
+  flex: none;
+  font-family: var(--font-mono);
+  color: var(--accent-2);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.title {
+  color: var(--text-2);
+}
+
+.url {
+  color: var(--text-faint);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
