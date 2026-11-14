@@ -8,7 +8,7 @@ baseline for heart rate, the rule does not fire.
 It never names a cause: it lists *possible factors* from data we actually have
 (short sleep, cabin CO₂/temperature) and leaves any clinical step to the CMO.
 
-Source: docs/AstroCare_Full_Plan.md §9.
+Source: Team decision.
 
 Pattern mirrors r_data_01_stale.py:
   1. set id / name / sources
@@ -26,7 +26,7 @@ class ElevatedHeartRateRule(Rule):
     id = "R-HR-01"
     name = "Heart rate above baseline"
     sources = [
-        "docs/AstroCare_Full_Plan.md §9",
+        "Team decision",
         "config/thresholds.yaml: hr_sd_multiplier, hr_consecutive_readings",
     ]
 
