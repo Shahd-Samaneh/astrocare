@@ -21,8 +21,8 @@ from server.core.models import ApiModel
 from server.core.status import mission_clock
 
 from .attention_stats import (
-    AttentionBaseline, DailyCognitiveTest, InputMethod, TestContext, TestMode, baseline_from, load_tests, pct_vs, pvt_measures,
-    recent_routine, score_trials, set_test_context, set_test_meta, within,
+    AttentionBaseline, DailyCognitiveTest, InputMethod, RangeStatus, TestContext, TestMode, baseline_from, load_tests, pct_vs, pvt_measures,
+    range_status, recent_routine, score_trials, set_test_context, set_test_meta, within,
 )
 from .engine_hooks import run_daily_engine
 
@@ -93,6 +93,7 @@ class TestResult(ApiModel):
     test: DailyCognitiveTest
     pct_vs_baseline: Optional[float] = None
     within_range: Optional[bool] = None
+    range_status: Optional[RangeStatus] = None  # within | faster | slower | flagged
     baseline: AttentionBaseline
     sleep_context: SleepContext = SleepContext()
     retest: Optional[RetestComparison] = None  # only for context 'retest' with relatedAlertId
@@ -109,6 +110,7 @@ def list_tests(n: int = Query(10, gt=0, le=200)) -> list[DailyCognitiveTest]:
     for t in out:
         base = baseline_from(all_tests, parse_ts(t.ts), mode=t.mode)
         t.within_range = None if base.building else within(t.median_ms, base)
+        t.range_status = range_status(t.median_ms, base)
     return out
 
 
@@ -150,6 +152,7 @@ def add_test(body: TestIn) -> TestResult:
                   if test.context == "retest" and test.related_alert_id else None)
     return TestResult(test=test, pct_vs_baseline=pct_vs(median, base),
                       within_range=None if base.building else within(median, base),
+                      range_status=range_status(median, base),
                       baseline=base, sleep_context=sleep_context_at(ts), retest=comparison,
                       input_differs=bool(test.input_method and base.usual_input_method
                                          and test.input_method != base.usual_input_method))

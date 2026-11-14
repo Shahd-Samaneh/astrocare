@@ -41,7 +41,7 @@ A **retest** linked to R-FAT-01 moves the alert to "recheck". The result screen 
 
 - **Thresholds are team choices.** The 6 h short-sleep cut-off, 2 short nights, +15 % slowdown, 7-test baseline and 2 h bedtime shift are all marked "experimental value" in `config/thresholds.yaml`. Only the 500 ms lapse definition is a standard PVT convention.
 - **The Extended mode is not a validated PVT.** It's 3 minutes long with 2–10 s waits (plus about 1 s of on-screen feedback between trials), on an ordinary screen and input device. Its numbers are only compared with the same person's other Extended tests.
-- **The usual range is narrow.** It's the min–max of a few earlier tests, so ordinary days sometimes fall just outside it.
+- **The usual range is a team choice.** It is the baseline median ± the larger of 10 % and the spread of the baseline tests. A result faster than the range is shown as "Faster than usual", never as a problem; only a result ≥ 15 % slower than the baseline is flagged ("Slower than usual").
 - **Browser timing:** a scripted check measured within a few ms of a known 250 ms response, but display refresh and input hardware add delays that vary by device. That is one reason input method is recorded.
 - **R-CIRC-01 doesn't fire on the current simulated data** (bedtime spread 1.9 h). It is verified with synthetic data, and a simulator change is proposed.
 - **All demo data is simulated.**

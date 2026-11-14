@@ -4,7 +4,7 @@
 import { ChevronDown } from 'lucide-react';
 import { useId, useState } from 'react';
 import { Button } from '../../../shared/components';
-import type { DailyCognitiveTest } from '../api.attention';
+import { rangeStatusOf, type DailyCognitiveTest, type RangeStatus } from '../api.attention';
 import styles from './Attention.module.css';
 
 const PAGE = 20;
@@ -20,22 +20,35 @@ function when(ts: string) {
   )}`;
 }
 
-function WithinCell({ v }: { v: boolean | null | undefined }) {
-  if (v == null)
-    return (
-      <span title="Baseline still building">
-        —<span className="sr-only">baseline still building</span>
-      </span>
-    );
-  return v ? (
-    <span className={styles.ok}>
-      ✓<span className="sr-only">within your usual range</span>
-    </span>
-  ) : (
-    <span className={styles.off}>
-      ✗<span className="sr-only">outside your usual range</span>
-    </span>
-  );
+function WithinCell({ status }: { status: RangeStatus | null }) {
+  switch (status) {
+    case null:
+      return (
+        <span title="Baseline still building">
+          —<span className="sr-only">baseline still building</span>
+        </span>
+      );
+    case 'within':
+      return (
+        <span className={styles.ok}>
+          ✓<span className="sr-only">within your usual range</span>
+        </span>
+      );
+    case 'faster':
+      return (
+        <span className={styles.ok}>
+          ✓ faster<span className="sr-only"> than usual</span>
+        </span>
+      );
+    case 'slower':
+      return <span>a little slower</span>;
+    case 'flagged':
+      return (
+        <span className={styles.off}>
+          ✗ slower<span className="sr-only"> than usual</span>
+        </span>
+      );
+  }
 }
 
 export function TestHistoryTable({ tests }: { tests: DailyCognitiveTest[] }) {
@@ -81,7 +94,7 @@ export function TestHistoryTable({ tests }: { tests: DailyCognitiveTest[] }) {
                 <th scope="col">Lapses</th>
                 <th scope="col">Sleepiness</th>
                 <th scope="col">Input</th>
-                <th scope="col">Within range</th>
+                <th scope="col">Vs usual range</th>
               </tr>
             </thead>
             <tbody>
@@ -98,7 +111,7 @@ export function TestHistoryTable({ tests }: { tests: DailyCognitiveTest[] }) {
                   </td>
                   <td>{t.inputMethod ?? '—'}</td>
                   <td>
-                    <WithinCell v={t.withinRange} />
+                    <WithinCell status={rangeStatusOf(t.rangeStatus, t.withinRange)} />
                   </td>
                 </tr>
               ))}

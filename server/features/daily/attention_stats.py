@@ -32,8 +32,14 @@ from .thresholds import daily_threshold
 TestContext = Literal["routine", "retest"]
 TestMode = Literal["quick", "extended"]
 InputMethod = Literal["mouse", "touch", "keyboard"]
+# within = inside the usual range; faster = below it (never a problem);
+# slower = above it but less than attention_slower_pct; flagged = slower by >= attention_slower_pct.
+RangeStatus = Literal["within", "faster", "slower", "flagged"]
 RECENT_HOURS = 48  # "the last 48 h" in the contract (window, not a clinical threshold)
-FEW_TESTS_PCT = 10  # range = median ± 10 % when the baseline has fewer than 3 tests (contract §5)
+# Usual range = median ± max(10 % of the median, spread of the baseline tests), where the
+# spread is the largest distance of a baseline test from the median. So the range always holds
+# every baseline test and is never narrower than ±10 % (also the rule with < 3 tests, contract §5).
+FEW_TESTS_PCT = 10
 
 
 # ---- contract extensions ----------------------------------------------------
@@ -60,6 +66,7 @@ class DailyCognitiveTest(CognitiveTest):
     measures: Optional[PvtMeasures] = None  # derived, never stored
     # derived for GET /api/tests: vs the same-mode baseline as it was at this test's time
     within_range: Optional[bool] = None
+    range_status: Optional[RangeStatus] = None
 
 
 class NextStepAction(ApiModel):
@@ -229,10 +236,9 @@ def baseline_from(tests: list[DailyCognitiveTest], now: datetime, mode: TestMode
         return AttentionBaseline(mode=mode)
     medians = [t.median_ms for t in older]
     med = float(statistics.median(medians))
-    if len(older) >= 3:
-        low, high = float(min(medians)), float(max(medians))
-    else:
-        low, high = med * (1 - FEW_TESTS_PCT / 100), med * (1 + FEW_TESTS_PCT / 100)
+    spread = max(abs(m - med) for m in medians)
+    half = max(med * FEW_TESTS_PCT / 100, spread)
+    low, high = med - half, med + half
     inputs = [t.input_method for t in older if t.input_method]
     usual = max(set(inputs), key=inputs.count) if inputs else None
     return AttentionBaseline(median_ms=med, n=len(older), range_low_ms=low, range_high_ms=high,
@@ -256,3 +262,16 @@ def within(value: float, base: AttentionBaseline) -> bool | None:
     if base.range_low_ms is None or base.range_high_ms is None:
         return None
     return base.range_low_ms <= value <= base.range_high_ms
+
+
+def range_status(value: float, base: AttentionBaseline) -> RangeStatus | None:
+    """None while the baseline is building. Faster than usual is never flagged; only a result
+    slower by >= attention_slower_pct is 'flagged'."""
+    if base.building or base.range_low_ms is None or base.range_high_ms is None:
+        return None
+    if value < base.range_low_ms:
+        return "faster"
+    if value <= base.range_high_ms:
+        return "within"
+    pct = pct_vs(value, base)
+    return "flagged" if pct is not None and pct >= daily_threshold("attention_slower_pct") else "slower"

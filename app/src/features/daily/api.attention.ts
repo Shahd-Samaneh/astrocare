@@ -9,6 +9,23 @@ import type { Alert, CheckIn, CognitiveTest, NextStep, Source } from '../../shar
 export type TestContext = 'routine' | 'retest';
 export type TestMode = 'quick' | 'extended';
 export type InputMethod = 'mouse' | 'touch' | 'keyboard';
+/**
+ * within = inside the usual range · faster = below it (never a problem) ·
+ * slower = above it but less than attention_slower_pct · flagged = slower by >= attention_slower_pct.
+ */
+export type RangeStatus = 'within' | 'faster' | 'slower' | 'flagged';
+
+/** Server status, or a fallback from withinRange + % for older servers. null = no verdict. */
+export function rangeStatusOf(
+  status: RangeStatus | null | undefined,
+  withinRange: boolean | null | undefined,
+  pct?: number | null,
+): RangeStatus | null {
+  if (status) return status;
+  if (withinRange == null) return null;
+  if (withinRange) return 'within';
+  return pct != null && pct < 0 ? 'faster' : 'slower';
+}
 
 export interface DailyCognitiveTest extends CognitiveTest {
   context: TestContext;
@@ -25,6 +42,7 @@ export interface DailyCognitiveTest extends CognitiveTest {
   measures?: PvtMeasures | null;
   /** GET /api/tests only: vs the same-mode baseline at this test's time; null = still building. */
   withinRange?: boolean | null;
+  rangeStatus?: RangeStatus | null;
 }
 
 export interface AttentionBaseline {
@@ -63,6 +81,7 @@ export interface TestResult {
   test: DailyCognitiveTest;
   pctVsBaseline: number | null;
   withinRange: boolean | null;
+  rangeStatus?: RangeStatus | null;
   baseline: AttentionBaseline;
   sleepContext: SleepContext;
   /** Only for retests linked to an alert. */

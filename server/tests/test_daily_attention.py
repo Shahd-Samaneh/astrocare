@@ -55,6 +55,7 @@ def test_all_lapses_still_save(c):
     t = r.json()["test"]
     assert t["lapses"] == 5 and t["medianMs"] == 800
     assert r.json()["withinRange"] is False
+    assert r.json()["rangeStatus"] == "flagged"
 
 
 def test_invalid_trials_return_422(c):
@@ -82,7 +83,45 @@ def test_baseline_uses_routine_tests_before_last_48h():
     assert b.n == 7  # attention_baseline_n
     assert b.test_ids == [f"t{10 + k}" for k in range(7)]  # the 7 newest of the older ones
     assert b.median_ms == 303
-    assert (b.range_low_ms, b.range_high_ms) == (300, 306)  # min / max
+    # spread (3 ms) < 10 % of the median, so the range is median ± 10 %
+    assert b.range_low_ms == pytest.approx(272.7) and b.range_high_ms == pytest.approx(333.3)
+
+
+def test_range_uses_spread_when_wider_than_10_pct():
+    meds = [300, 250, 380, 310, 290]  # median 300, largest distance 80 ms (> 30 ms)
+    b = baseline_from([_t(k, 60 + 24 * k, m) for k, m in enumerate(meds)], utcnow())
+    assert b.median_ms == 300
+    assert (b.range_low_ms, b.range_high_ms) == (220, 380)
+    assert all(b.range_low_ms <= m <= b.range_high_ms for m in meds)  # every baseline test is ✓
+
+
+def _base300():
+    return baseline_from([_t(k, 60 + 24 * k, 300) for k in range(5)], utcnow())  # range 270–330
+
+
+@pytest.mark.parametrize("value,status", [
+    (300, "within"), (271, "within"), (330, "within"),
+    (200, "faster"),            # faster than usual is never a problem
+    (340, "slower"),            # above the range but < attention_slower_pct (15 %)
+    (345, "flagged"), (500, "flagged"),
+])
+def test_range_status(value, status):
+    from server.features.daily.attention_stats import range_status
+
+    assert range_status(value, _base300()) == status
+
+
+def test_range_status_none_while_building():
+    from server.features.daily.attention_stats import range_status
+
+    b = baseline_from([_t(1, 60, 300)], utcnow())
+    assert b.building and range_status(200, b) is None and range_status(500, b) is None
+
+
+def test_faster_result_is_not_a_problem(c):
+    r = c.post("/api/tests", json={"trialsMs": [150, 160, 155]}).json()
+    assert r["pctVsBaseline"] < 0
+    assert r["rangeStatus"] == "faster"
 
 
 def test_baseline_with_fewer_than_three_tests_uses_plus_minus_10_pct():

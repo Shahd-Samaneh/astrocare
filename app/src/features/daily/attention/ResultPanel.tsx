@@ -1,19 +1,26 @@
 // Owner: Shahd. Result of one attention test: median, lapses, false starts, % vs baseline.
 import { Badge, SimulatedBadge } from '../../../shared/components';
-import type { TestResult } from '../api.attention';
+import { rangeStatusOf, type RangeStatus, type TestResult } from '../api.attention';
 import { KSS_ANCHORS } from './kss';
 import { TrialPlot } from './TrialPlot';
 import styles from './Attention.module.css';
 
 export const EXPERIMENTAL_NOTE = 'Experimental. Does not decide fitness for duty.';
 
-export function RangeBadge({ withinRange }: { withinRange: boolean | null }) {
-  if (withinRange === null) return <Badge variant="neutral">No baseline yet</Badge>;
-  return withinRange ? (
-    <Badge variant="good">Within your usual range</Badge>
-  ) : (
-    <Badge variant="review">Outside your usual range</Badge>
-  );
+/** Only a result slower by >= attention_slower_pct is shown as needing review. */
+export function RangeBadge({ status }: { status: RangeStatus | null }) {
+  switch (status) {
+    case null:
+      return <Badge variant="neutral">No baseline yet</Badge>;
+    case 'within':
+      return <Badge variant="good">Within your usual range</Badge>;
+    case 'faster':
+      return <Badge variant="info">Faster than usual</Badge>;
+    case 'slower':
+      return <Badge variant="neutral">A little slower than usual</Badge>;
+    case 'flagged':
+      return <Badge variant="review">Slower than usual</Badge>;
+  }
 }
 
 function pctText(pct: number | null) {
@@ -42,7 +49,7 @@ export function ResultPanel({
             Building your baseline ({baseline.n}/{baseline.needed ?? 3})
           </Badge>
         ) : (
-          <RangeBadge withinRange={withinRange} />
+          <RangeBadge status={rangeStatusOf(result.rangeStatus, withinRange, pctVsBaseline)} />
         )}
         {extended && <Badge variant="pink">Extended · Experimental, not validated</Badge>}
         {test.context === 'retest' && <Badge variant="info">Retest</Badge>}
