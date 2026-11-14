@@ -50,7 +50,7 @@ def test_manual_reading_and_ack(client):
 
 def test_posts_accept_camel_case(client):
     assert client.post("/api/checkins", json={"mood": 4, "stress": 2}).status_code == 201
-    assert client.post("/api/tests", json={"trialsMs": [280, 300, 290, 610, 270]}).json()["lapses"] == 1
+    assert client.post("/api/tests", json={"trialsMs": [280, 300, 290, 610, 270]}).json()["test"]["lapses"] == 1
     assert client.post("/api/relax/sessions", json={
         "sceneId": "ocean-shore", "audioMode": "nature", "durationMin": 10, "stressBefore": 4,
     }).status_code == 201
