@@ -1,6 +1,7 @@
 // Owner: Shahd. Result of one attention test: median, lapses, false starts, % vs baseline.
 import { Badge, SimulatedBadge } from '../../../shared/components';
 import type { TestResult } from '../api.attention';
+import { KSS_ANCHORS } from './kss';
 import styles from './Attention.module.css';
 
 export const EXPERIMENTAL_NOTE = 'Experimental. Does not decide fitness for duty.';
@@ -85,6 +86,14 @@ export function ResultPanel({ result }: { result: TestResult }) {
           </>
         )}
       </p>
+      {test.sleepinessKss != null && (
+        <p className={styles.meta}>
+          You rated sleepiness <strong>{test.sleepinessKss}/9</strong>
+          {KSS_ANCHORS[test.sleepinessKss] ? ` (${KSS_ANCHORS[test.sleepinessKss]})` : ''}, next to
+          a measured median of <strong>{Math.round(test.medianMs)} ms</strong>. Self-rating and
+          measured speed can disagree. Both are useful.
+        </p>
+      )}
       <p className={styles.experimental} role="note">
         {EXPERIMENTAL_NOTE}
       </p>

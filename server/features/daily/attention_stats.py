@@ -10,22 +10,28 @@ Haya merges them into core/models.py + contracts.ts:
   * DailyNextStep      = NextStep + action {label, route}
   * DailyAlert         = Alert whose next_steps are DailyNextStep
 Test context is stored in our own table `daily_test_context`. A test without a row
-there is a 'routine' test (all simulated tests are routine).
+there is a 'routine' test (all simulated tests are routine). Mode, sleepiness (KSS),
+input method and per-trial timing live in `daily_test_meta`; no row = a quick test.
 """
 from __future__ import annotations
 
+import json
 import statistics
 from datetime import datetime, timedelta
 from typing import Any, Iterable, Literal, Optional
 
 from server.core import db
 from server.core.config import parse_ts
+from pydantic import Field
+
 from server.core.models import Alert, ApiModel, CognitiveTest, NextStep
 from server.core.status import mission_clock
 
 from .thresholds import daily_threshold
 
 TestContext = Literal["routine", "retest"]
+TestMode = Literal["quick", "extended"]
+InputMethod = Literal["mouse", "touch", "keyboard"]
 RECENT_HOURS = 48  # "the last 48 h" in the contract (window, not a clinical threshold)
 FEW_TESTS_PCT = 10  # range = median ± 10 % when the baseline has fewer than 3 tests (contract §5)
 
@@ -35,6 +41,11 @@ class DailyCognitiveTest(CognitiveTest):
     context: TestContext = "routine"
     related_alert_id: Optional[str] = None
     mission_day: Optional[int] = None  # derived from ts (mission clock), never stored
+    # from daily_test_meta (absent row = a quick test with no extra data, e.g. simulated)
+    mode: TestMode = "quick"
+    sleepiness_kss: Optional[int] = Field(default=None, ge=1, le=9)  # Karolinska Sleepiness Scale
+    input_method: Optional[InputMethod] = None
+    trial_offsets_ms: Optional[list[float]] = None  # response time since test start, per trial
 
 
 class NextStepAction(ApiModel):
@@ -78,9 +89,48 @@ def context_map() -> dict[str, tuple[str, str | None]]:
     return {r[0]: (r[1], r[2]) for r in rows}
 
 
+# ---- daily_test_meta table (mode, sleepiness, input method, trial timing) -------
+_META_DDL = (
+    'CREATE TABLE IF NOT EXISTS "daily_test_meta" ('
+    """"test_id" TEXT PRIMARY KEY, "mode" TEXT NOT NULL DEFAULT 'quick', "sleepiness_kss" INTEGER, """
+    '"input_method" TEXT, "trial_offsets_ms" TEXT)'
+)
+META_FIELDS = ("mode", "sleepiness_kss", "input_method", "trial_offsets_ms")
+
+
+def ensure_meta_table() -> None:
+    with db.connect() as conn:
+        conn.execute(_META_DDL)
+
+
+def set_test_meta(test_id: str, *, mode: str = "quick", sleepiness_kss: int | None = None,
+                  input_method: str | None = None, trial_offsets_ms: list[float] | None = None) -> None:
+    ensure_meta_table()
+    with db.connect() as conn:
+        conn.execute(
+            'INSERT OR REPLACE INTO "daily_test_meta" (test_id, mode, sleepiness_kss, input_method, trial_offsets_ms) '
+            "VALUES (?, ?, ?, ?, ?)",
+            (test_id, mode, sleepiness_kss, input_method,
+             json.dumps(trial_offsets_ms) if trial_offsets_ms is not None else None),
+        )
+
+
+def meta_map() -> dict[str, dict[str, Any]]:
+    ensure_meta_table()
+    with db.connect() as conn:
+        rows = conn.execute(f'SELECT test_id, {", ".join(META_FIELDS)} FROM "daily_test_meta"').fetchall()
+    out = {}
+    for r in rows:
+        d = dict(zip(META_FIELDS, r[1:]))
+        d["trial_offsets_ms"] = json.loads(d["trial_offsets_ms"]) if d["trial_offsets_ms"] else None
+        out[r[0]] = {k: v for k, v in d.items() if v is not None}
+    return out
+
+
 def with_context(tests: Iterable[CognitiveTest | dict[str, Any]]) -> list[DailyCognitiveTest]:
-    """Attach context / relatedAlertId to plain tests (or DB rows)."""
+    """Attach context / relatedAlertId / meta / missionDay to plain tests (or DB rows)."""
     ctx = context_map()
+    meta = meta_map()
     out = []
     for t in tests:
         data = t.model_dump() if isinstance(t, CognitiveTest) else dict(t)
@@ -88,6 +138,7 @@ def with_context(tests: Iterable[CognitiveTest | dict[str, Any]]) -> list[DailyC
         out.append(DailyCognitiveTest.model_validate({
             **data, "context": context, "related_alert_id": related,
             "mission_day": mission_clock(parse_ts(data["ts"]))[1],
+            **meta.get(data["id"], {}),
         }))
     return out
 

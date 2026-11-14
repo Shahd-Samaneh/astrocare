@@ -22,7 +22,7 @@ from server.core.status import mission_clock
 
 from .attention_stats import (
     AttentionBaseline, DailyCognitiveTest, TestContext, baseline_from, load_tests, pct_vs,
-    recent_routine, score_trials, set_test_context, within,
+    recent_routine, score_trials, set_test_context, set_test_meta, within,
 )
 from .engine_hooks import run_daily_engine
 
@@ -34,6 +34,7 @@ class TestIn(ApiModel):
     false_starts: int = Field(default=0, ge=0)
     context: TestContext = "routine"
     related_alert_id: Optional[str] = None
+    sleepiness_kss: Optional[int] = Field(default=None, ge=1, le=9)  # KSS 1–9, optional
     ts: Optional[str] = None  # tests and backfill only; the UI never sends it
 
 
@@ -87,12 +88,13 @@ def add_test(body: TestIn) -> TestResult:
         id=db.new_id("pvt"), ts=ts, trials_ms=valid, median_ms=median, lapses=lapses,
         false_starts=body.false_starts, context=body.context,
         related_alert_id=body.related_alert_id if body.context == "retest" else None,
-        mission_day=mission_clock(parse_ts(ts))[1],
+        mission_day=mission_clock(parse_ts(ts))[1], sleepiness_kss=body.sleepiness_kss,
     )
     # Baseline before inserting: the new test never counts towards its own baseline.
     base = baseline_from(load_tests(), parse_ts(ts))
     db.insert("cognitive_tests", test.model_dump())  # extra fields are ignored by db.insert
     set_test_context(test.id, test.context, test.related_alert_id)
+    set_test_meta(test.id, mode=test.mode, sleepiness_kss=test.sleepiness_kss)
     db.log_action("crew", "attention_test" if test.context == "routine" else "attention_retest", test.id)
     run_daily_engine()
     return TestResult(test=test, pct_vs_baseline=pct_vs(median, base), within_range=within(median, base),

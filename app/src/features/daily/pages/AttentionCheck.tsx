@@ -21,6 +21,7 @@ import {
 import { HistoryChart } from '../attention/HistoryChart';
 import { EXPERIMENTAL_NOTE, ResultPanel } from '../attention/ResultPanel';
 import { SleepRtChart } from '../attention/SleepRtChart';
+import { SleepinessQuestion } from '../attention/SleepinessQuestion';
 import { TestRunner } from '../attention/TestRunner';
 import {
   TRIALS,
@@ -56,6 +57,7 @@ export default function AttentionCheck() {
   const [result, setResult] = useState<TestResult>();
   const [saving, setSaving] = useState<Saving>({ state: 'idle' });
   const [practice, setPractice] = useState(loadPracticeDefault);
+  const [kss, setKss] = useState<number | null | undefined>(undefined);
 
   const save = useCallback(
     async (trialsMs: number[], falseStarts: number) => {
@@ -64,6 +66,7 @@ export default function AttentionCheck() {
         const r = await postTest({
           trialsMs,
           falseStarts,
+          sleepinessKss: kss ?? null,
           ...(retestId ? { context: 'retest' as const, relatedAlertId: retestId } : {}),
         });
         setResult(r);
@@ -77,7 +80,7 @@ export default function AttentionCheck() {
         setSaving({ state: 'error', message, trials: trialsMs, falseStarts });
       }
     },
-    [retestId, history, baseline, summary],
+    [retestId, kss, history, baseline, summary],
   );
 
   const test = useReactionTest(save);
@@ -85,6 +88,11 @@ export default function AttentionCheck() {
   const running = isRunning(phase);
   const respond = useCallback(() => test.respond(), [test]);
   const cancel = useCallback(() => test.cancel(), [test]);
+  const backToIntro = () => {
+    setResult(undefined);
+    setSaving({ state: 'idle' });
+    setKss(undefined); // a fresh rating for each test
+  };
   const start = () => {
     setResult(undefined);
     setSaving({ state: 'idle' });
@@ -145,7 +153,7 @@ export default function AttentionCheck() {
                     Back to the alert
                   </Button>
                 )}
-                <Button variant="secondary" onClick={start} icon={<Play size={16} />}>
+                <Button variant="secondary" onClick={backToIntro} icon={<Play size={16} />}>
                   Test again
                 </Button>
               </div>
@@ -163,6 +171,7 @@ export default function AttentionCheck() {
                   Your median time is compared with your own usual range, not with other people.
                 </li>
               </ul>
+              <SleepinessQuestion value={kss} onChange={setKss} />
               <label className={styles.check}>
                 <input
                   type="checkbox"

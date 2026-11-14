@@ -8,6 +8,7 @@ import type { Alert, CheckIn, CognitiveTest, NextStep, Source } from '../../shar
 
 export type TestContext = 'routine' | 'retest';
 export type TestMode = 'quick' | 'extended';
+export type InputMethod = 'mouse' | 'touch' | 'keyboard';
 
 export interface DailyCognitiveTest extends CognitiveTest {
   context: TestContext;
@@ -16,6 +17,11 @@ export interface DailyCognitiveTest extends CognitiveTest {
   missionDay?: number | null;
   /** 'quick' (5 trials) or 'extended' (3 min). Absent on older servers = quick. */
   mode?: TestMode;
+  /** Karolinska Sleepiness Scale 1–9, null if skipped. */
+  sleepinessKss?: number | null;
+  inputMethod?: InputMethod | null;
+  /** Response time since the test started, per trial (ms). */
+  trialOffsetsMs?: number[] | null;
 }
 
 export interface AttentionBaseline {
@@ -47,6 +53,7 @@ export interface NewTest {
   falseStarts: number;
   context?: TestContext;
   relatedAlertId?: string;
+  sleepinessKss?: number | null;
 }
 
 export interface NasaSource {

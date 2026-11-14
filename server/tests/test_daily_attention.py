@@ -131,3 +131,19 @@ def test_sleep_context_unknown_without_sleep(c):
         conn.execute("DELETE FROM sleep_sessions")
     ctx = c.post("/api/tests", json={"trialsMs": [300, 310, 290]}).json()["sleepContext"]
     assert ctx["hoursAwake"] is None and ctx["sleptHours"] is None
+
+
+# ---- sleepiness (KSS) ---------------------------------------------------------------
+@pytest.mark.parametrize("kss", [1, 5, 9, None])
+def test_kss_valid_values_are_stored(c, kss):
+    body = {"trialsMs": [300, 310, 290]}
+    if kss is not None:
+        body["sleepinessKss"] = kss
+    t = c.post("/api/tests", json=body).json()["test"]
+    assert t["sleepinessKss"] == kss
+    assert c.get("/api/tests?n=1").json()[0]["sleepinessKss"] == kss
+
+
+@pytest.mark.parametrize("kss", [0, 10, -1])
+def test_kss_out_of_range_is_rejected(c, kss):
+    assert c.post("/api/tests", json={"trialsMs": [300], "sleepinessKss": kss}).status_code == 422
