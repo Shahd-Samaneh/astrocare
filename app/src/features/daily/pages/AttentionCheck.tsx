@@ -22,7 +22,14 @@ import { HistoryChart } from '../attention/HistoryChart';
 import { EXPERIMENTAL_NOTE, ResultPanel } from '../attention/ResultPanel';
 import { SleepRtChart } from '../attention/SleepRtChart';
 import { TestRunner } from '../attention/TestRunner';
-import { TRIALS, isRunning, useReactionTest } from '../attention/useReactionTest';
+import {
+  TRIALS,
+  isRunning,
+  loadPracticeDefault,
+  markFirstTestDone,
+  savePracticeChoice,
+  useReactionTest,
+} from '../attention/useReactionTest';
 import styles from '../attention/Attention.module.css';
 import { NasaBasis } from '../common/NasaBasis';
 
@@ -48,6 +55,7 @@ export default function AttentionCheck() {
 
   const [result, setResult] = useState<TestResult>();
   const [saving, setSaving] = useState<Saving>({ state: 'idle' });
+  const [practice, setPractice] = useState(loadPracticeDefault);
 
   const save = useCallback(
     async (trialsMs: number[], falseStarts: number) => {
@@ -60,6 +68,7 @@ export default function AttentionCheck() {
         });
         setResult(r);
         setSaving({ state: 'idle' });
+        markFirstTestDone();
         history.reload();
         baseline.reload();
         summary.reload();
@@ -79,7 +88,7 @@ export default function AttentionCheck() {
   const start = () => {
     setResult(undefined);
     setSaving({ state: 'idle' });
-    test.start();
+    test.start({ practice });
   };
 
   const dateText = new Date().toLocaleDateString('en-GB', {
@@ -154,6 +163,17 @@ export default function AttentionCheck() {
                   Your median time is compared with your own usual range, not with other people.
                 </li>
               </ul>
+              <label className={styles.check}>
+                <input
+                  type="checkbox"
+                  checked={practice}
+                  onChange={(e) => {
+                    setPractice(e.target.checked);
+                    savePracticeChoice(e.target.checked);
+                  }}
+                />
+                Start with one practice trial (Practice: not counted)
+              </label>
               <div className={styles.row}>
                 <Button onClick={start} icon={<Timer size={16} />} autoFocus>
                   {retestId ? 'Start retest' : 'Start'}

@@ -275,3 +275,23 @@
   color: var(--text-faint);
   font-style: italic;
 }
+
+/* ---- options (practice, mode, sleepiness) ---------------------------------------- */
+.practice {
+  color: var(--pink-2);
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap-min);
+  cursor: pointer;
+  color: var(--text-2);
+}
+
+.check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}

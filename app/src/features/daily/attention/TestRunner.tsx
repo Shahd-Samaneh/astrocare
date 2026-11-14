@@ -44,15 +44,29 @@ export function TestRunner({ state, onRespond, onCancel }: TestRunnerProps) {
   const trialNo = Math.min(state.trialsMs.length + 1, TRIALS);
   const msg =
     state.phase === 'feedback'
-      ? { big: `${Math.round(state.lastMs ?? 0)} ms`, small: 'Get ready for the next one.' }
-      : (MESSAGE[state.phase] ?? MESSAGE.waiting);
+      ? {
+          big: `${Math.round(state.lastMs ?? 0)} ms`,
+          small: state.lastWasPractice
+            ? 'Practice done (not counted). The real test starts now.'
+            : 'Get ready for the next one.',
+        }
+      : state.practicing && state.phase === 'falseStart'
+        ? { big: 'Too soon', small: 'Practice: wait for the signal, then respond.' }
+        : (MESSAGE[state.phase] ?? MESSAGE.waiting);
+  const progressLabel = state.practicing
+    ? 'Practice: not counted'
+    : `Trial ${trialNo} of ${TRIALS}`;
 
   return (
     <div className={styles.runner}>
       <div className={styles.runnerHead}>
-        <span className={styles.progress} aria-label={`Trial ${trialNo} of ${TRIALS}`}>
-          Trial {trialNo}/{TRIALS}
-        </span>
+        {state.practicing ? (
+          <span className={`${styles.progress} ${styles.practice}`}>Practice: not counted</span>
+        ) : (
+          <span className={styles.progress} aria-label={progressLabel}>
+            Trial {trialNo}/{TRIALS}
+          </span>
+        )}
         <ol className={styles.dots} aria-hidden>
           {Array.from({ length: TRIALS }, (_, i) => (
             <li
@@ -89,7 +103,7 @@ export function TestRunner({ state, onRespond, onCancel }: TestRunnerProps) {
         <span className={styles.small}>{msg.small}</span>
       </div>
       <p id="pvt-live" className="sr-only" aria-live="assertive">
-        {msg.big}
+        {state.practicing ? `Practice. ${msg.big}` : msg.big}
       </p>
       {state.falseStarts > 0 && (
         <p className={styles.meta}>

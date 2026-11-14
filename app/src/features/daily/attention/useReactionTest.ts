@@ -1,7 +1,9 @@
 // Owner: Shahd. State machine for the 5-trial reaction test (PVT-style).
 //
-//   waiting (random 2–8 s) → stimulus → response → feedback → next trial … → done
-//   A response during "waiting" is a false start: it is counted and that trial repeats.
+//   [practice trial, not counted] → waiting (random 2–8 s) → stimulus → response → feedback
+//   → next trial … → done
+//   A response during "waiting" is a false start: it is counted and that trial repeats
+//   (during the practice trial it is shown but not counted).
 //   No response within NO_RESPONSE_MS records NO_RESPONSE_MS (a lapse) so the test can't hang.
 // Timing uses performance.now(). The stimulus time is taken in the animation frame
 // that paints the stimulus, so render time isn't counted against the user.
@@ -21,9 +23,17 @@ export interface ReactionState {
   trialsMs: number[];
   falseStarts: number;
   lastMs?: number;
+  /** True while the practice trial runs (its result is never recorded). */
+  practicing: boolean;
+  /** The feedback being shown is for the practice trial. */
+  lastWasPractice?: boolean;
 }
 
-const INITIAL: ReactionState = { phase: 'idle', trialsMs: [], falseStarts: 0 };
+export interface StartOptions {
+  practice: boolean;
+}
+
+const INITIAL: ReactionState = { phase: 'idle', trialsMs: [], falseStarts: 0, practicing: false };
 
 type DoneHandler = (trialsMs: number[], falseStarts: number) => void;
 
@@ -43,13 +53,18 @@ function createController(render: () => void, onDone: { current: DoneHandler }) 
 
   const record = (ms: number) => {
     clear();
+    if (state.practicing) {
+      set({ phase: 'feedback', lastMs: ms, practicing: false, lastWasPractice: true });
+      timer = window.setTimeout(wait, FEEDBACK_MS);
+      return;
+    }
     const trialsMs = [...state.trialsMs, Math.round(ms)];
     if (trialsMs.length >= TRIALS) {
-      set({ phase: 'done', trialsMs, lastMs: ms });
+      set({ phase: 'done', trialsMs, lastMs: ms, lastWasPractice: false });
       onDone.current(trialsMs, state.falseStarts);
       return;
     }
-    set({ phase: 'feedback', trialsMs, lastMs: ms });
+    set({ phase: 'feedback', trialsMs, lastMs: ms, lastWasPractice: false });
     timer = window.setTimeout(wait, FEEDBACK_MS);
   };
 
@@ -73,15 +88,18 @@ function createController(render: () => void, onDone: { current: DoneHandler }) 
     get state() {
       return state;
     },
-    start() {
+    start(opts: StartOptions = { practice: false }) {
       clear();
-      state = INITIAL;
+      state = { ...INITIAL, practicing: opts.practice };
       wait();
     },
     respond() {
       if (state.phase === 'waiting') {
         clear();
-        set({ phase: 'falseStart', falseStarts: state.falseStarts + 1 });
+        set({
+          phase: 'falseStart',
+          falseStarts: state.practicing ? state.falseStarts : state.falseStarts + 1,
+        });
         timer = window.setTimeout(wait, FALSE_START_MS);
       } else if (state.phase === 'stimulus') {
         record(performance.now() - stimulusAt);
@@ -108,3 +126,35 @@ export function useReactionTest(onDone: DoneHandler) {
 
 export const isRunning = (p: Phase) =>
   p === 'waiting' || p === 'stimulus' || p === 'feedback' || p === 'falseStart';
+
+// ---- practice preference (per device, localStorage; always wrapped in try/catch) ----
+const PRACTICE_KEY = 'astrocare.daily.attention.practice';
+const FIRST_DONE_KEY = 'astrocare.daily.attention.firstTestDone';
+
+/** Stored choice if any; otherwise on until the first test on this device is saved. */
+export function loadPracticeDefault(): boolean {
+  try {
+    const v = window.localStorage.getItem(PRACTICE_KEY);
+    if (v === '1') return true;
+    if (v === '0') return false;
+    return window.localStorage.getItem(FIRST_DONE_KEY) !== '1';
+  } catch {
+    return true;
+  }
+}
+
+export function savePracticeChoice(on: boolean): void {
+  try {
+    window.localStorage.setItem(PRACTICE_KEY, on ? '1' : '0');
+  } catch {
+    /* storage unavailable: the choice just isn't remembered */
+  }
+}
+
+export function markFirstTestDone(): void {
+  try {
+    window.localStorage.setItem(FIRST_DONE_KEY, '1');
+  } catch {
+    /* ignore */
+  }
+}
