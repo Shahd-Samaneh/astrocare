@@ -54,7 +54,7 @@ def test_posts_accept_camel_case(client):
     assert client.post("/api/relax/sessions", json={
         "sceneId": "ocean-shore", "audioMode": "nature", "durationMin": 10, "stressBefore": 4,
     }).status_code == 201
-    assert client.post("/api/reports", json={"sections": [{"id": "s1", "title": "Note"}]}).json()["status"] == "draft"
+    assert client.post("/api/reports", json={"sections": ["summary"], "itemIds": []}).json()["status"] == "ready"
 
 
 def test_assistant_refuses_medication_questions(client):

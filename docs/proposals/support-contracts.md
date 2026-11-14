@@ -257,3 +257,87 @@ is put in the input box instead. Suggested buttons:
 ```
 The conversation is kept when the user leaves the Assistant page and comes back (and across a reload of the
 same tab: `sessionStorage`), and **Clear chat** empties it.
+
+---
+
+## Noura: Reports, comms, relax
+
+Local copies until merged:
+- Python: `server/features/reports/router.py` (`ReportItem`, `ReportItemIn`)
+- TS: `app/src/features/support/reports/types.ts` (coming with the reports screen)
+
+### N1. `ReportItem` (contracts §1) → `contracts.ts` + `models.py`
+
+```ts
+type ReportItemKind = 'alert' | 'cmo_question' | 'note';
+
+interface ReportItem {
+  id: string;
+  kind: ReportItemKind;
+  refId?: string | null;      // alert.id when kind = 'alert'
+  title: string;
+  text: string;
+  sourceFeature: 'monitoring' | 'daily' | 'assistant' | 'relax';
+  createdTs: string;
+  reportId?: string | null;   // set once the item is included in a report
+}
+```
+
+**Live now:**
+```
+POST   /api/reports/items   { kind, refId?, title, text, sourceFeature } -> 201 ReportItem
+GET    /api/reports/items?pending=true                                    -> ReportItem[]
+DELETE /api/reports/items/{id}                                            -> 204 (404 if unknown)
+```
+Python: `from server.features.reports.service import add_report_item`
+`add_report_item(kind, title, text, source_feature, ref_id=None) -> dict`
+
+`sourceFeature` adds `'relax'` to the contract list (the Relax "Request support" button).
+
+### N2. Tables (created by my own code, not `core/db.TABLES`)
+
+`report_items` is created with `CREATE TABLE IF NOT EXISTS` in `server/features/reports/service.py`, through `core.db.connect()`. `comms_windows` will follow the same way.
+
+### N3. `shared/api/client.ts`: `del` (same as Marah's A4)
+
+Needed for `DELETE /api/reports/items/{id}`. Until then my `reports/api.ts` uses `fetch('/api/...')` directly.
+
+
+### N4. `CommsStatus` (contracts §3)
+
+```ts
+interface CommsStatus {
+  connected: boolean;          // scheduled window open now, or a simulated one
+  simulatedWindow: boolean;
+  nextWindowTs: string;        // from core/status.next_comm_window() (config/app.yaml), not duplicated
+  windowDurationMin: number;
+  queuedCount: number;
+  signalDelaySec: number;
+  lastWindowTs?: string | null;
+}
+```
+
+**Live now:**
+```
+GET  /api/comms                   -> CommsStatus   (replaces the old shape with `outbox[]`)
+POST /api/comms/simulate-window   -> { windowId, openedTs, sentReportIds[] }   // demo only: queued -> sent
+```
+Python: `from server.features.reports.service import get_comms_status` (same shape, snake_case). Haya can call it from `core/status` if useful.
+Table: `comms_windows` (created in my `service.py`).
+
+
+### N5. Reports API (contracts §2)
+
+**Live now:**
+```
+GET  /api/reports?status=                 -> ReportOut[]   (Report + sentTs)
+POST /api/reports { sections: SectionId[], itemIds?: string[] } -> 201 ReportOut (status 'ready')
+GET  /api/reports/{id}/file?format=pdf|json
+POST /api/reports/{id}/queue              -> ready -> queued (409 if not ready, 404 if unknown)
+```
+- `POST /api/reports` now takes **section ids** (contracts §2), not full `ReportSection` objects. The server builds each section's body.
+- `SectionId = 'summary'|'alerts'|'vitals'|'cabin'|'sleep'|'attention'|'exercise'|'checkins'|'relax'|'items'|'radiation'`
+- Files: `data/reports/{id}.pdf` + `.json` (ReportLab, built-in fonts, no network). Every report has the SIMULATED line + NASA/CSA sources.
+- `checkins` only if `get_permissions()["report"]["checkins"]` (Marah's); otherwise "Not included: permission required". `notePrivate` is never copied.
+- Proposal: add `sentTs?: string | null` to `Report` (from the `comms_windows` log).
+- ⚠️ `server/tests/test_health.py::test_posts_accept_camel_case`: one line updated to the new body (`{"sections": ["summary"], "itemIds": []}` → `ready`). Haya, please check.
