@@ -16,11 +16,23 @@ hr_sd_multiplier:
   source: "Team decision: personal baseline mean ± k·SD"
   note: "Heart rate outside baseline mean ± k·SD is flagged for review."
 
+hr_consecutive_readings:
+  value: 3
+  unit: readings
+  source: "Team decision"
+  note: "Number of consecutive good-quality HR readings that must all be above baseline to flag R-HR-01."
+
 spo2_min:
   value: 92
   unit: "%"
-  source: "TODO"
-  note: "verify source (commonly cited lower bound for healthy adults; confirm against a NASA/clinical reference)."
+  source: "Experimental value (no NASA source)"
+  note: "Commonly cited lower bound for healthy adults; not yet confirmed against a NASA/clinical reference. Treat as experimental."
+
+spo2_low_minutes:
+  value: 5
+  unit: min
+  source: "Team decision"
+  note: "A low SpO2 episode must span at least this long (first low reading to the latest) before R-SPO2-01 fires."
 
 sleep_short_hours:
   value: 6
