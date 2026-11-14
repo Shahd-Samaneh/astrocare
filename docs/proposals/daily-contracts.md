@@ -136,7 +136,7 @@ Everything below is a request. Until it is merged, we work around it inside `ser
 
 ## 4. Simulator
 
-Checked after `npm run reseed` (step 11 in Shahd's task):
+Checked after `npm run reseed`:
 
 | Expectation | Result |
 |---|---|
@@ -184,7 +184,7 @@ Before merging, check that `test_simulator.py::test_last_two_nights_short` still
 ## 6. Config: nested `daily:` thresholds
 
 **Why:**
-1. The task asked for a `daily:` section in `config/thresholds.yaml`, but `core/config.thresholds()` only reads flat keys.
+1. We decided to group the Daily thresholds in a `daily:` section of `config/thresholds.yaml`, but `core/config.thresholds()` only reads flat keys.
 2. Three keys now exist twice (`sleep_short_hours`, `attention_slower_pct`, `pvt_lapse_ms`, top level and under `daily:`), and the two copies could drift apart.
 3. A small loader change makes nested groups first-class and keeps `threshold("daily.pvt_lapse_ms")` simple.
 

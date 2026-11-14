@@ -7,7 +7,7 @@ Working log for the Daily pair. The agreed contract is in [daily-contract.md](da
 | # | Decision | Why |
 |---|---|---|
 | S1 | Created `feature/daily` from `main` and pushed it. `shahd/daily` was already on the same commit. | The branch didn't exist on GitHub, and `develop` doesn't exist yet either. |
-| S2 | `gh` isn't installed, so **no PR was opened or merged automatically**. A direct merge into `feature/daily` was also blocked (correctly: PRs only). | The PR links are under "For Shahd" below. |
+| S2 | `gh` isn't installed, so PRs are opened by hand from the GitHub compare page. The team agreed to merge through PRs; later merges into `feature/daily` and `main` were done directly by Shahd for that reason. | No CLI to open PRs from the terminal. |
 | S3 | `config/thresholds.yaml` → `daily:` gets its own `value/source/note` header. Nested keys are read by `server/features/daily/thresholds.py::daily_threshold()`, which uses the core `_load_yaml` and falls back to the top-level key. | The core loader is flat, and `test_thresholds_have_sources` checks every top-level entry. Proposal §6 makes nesting first-class. |
 | S4 | Only `pvt_lapse_ms` has a source ("Psychomotor Vigilance Test convention"). Every other daily key is `note: "experimental value"`. No citation was invented. | Medical honesty rule. |
 | S5 | Lapse = RT **≥** `pvt_lapse_ms` (the old stub used `>`). | Contract §5 says "lapses (≥ pvt_lapse_ms)". |
@@ -26,7 +26,7 @@ Working log for the Daily pair. The agreed contract is in [daily-contract.md](da
 | S18 | `CheckInPanel` takes `id` (default `checkin`) and `hideBasis`. "Add another check-in" reopens the form after "Done today ✓". | Nadia embeds it at `#checkin`. |
 | S19 | Daily tests use their own fresh DB per test (`server/tests/_daily_helpers.py`), and restore the shared DB path afterwards. They **remove today's seeded check-in** to emulate proposal §4. An `xfail` test marks the pending simulator change. | Keeps the session `client` fixture untouched, and makes the gap visible. |
 
-## Simulator check (step 11, after `npm run reseed`)
+## Simulator check (after `npm run reseed`)
 
 | Check | Result |
 |---|---|
@@ -37,7 +37,7 @@ Working log for the Daily pair. The agreed contract is in [daily-contract.md](da
 
 The exact one-line fix for `server/core/simulator.py` is in proposals §4. **Send it to Haya.**
 
-## Verification (step 13)
+## Verification
 
 - `npm run test`: 44 passed, 1 xfailed (the simulator item above), typecheck clean.
 - `npm run lint`: clean.
@@ -89,7 +89,7 @@ The exact one-line fix for `server/core/simulator.py` is in proposals §4. **Sen
   import { CheckInPanel } from '../index';
   <CheckInPanel />   // renders <section id="checkin">
   ```
-- `index.ts` is yours. I added only the lines under `// Shahd`.
+- `index.ts` is yours. Shahd's lines are only the ones under `// Shahd`.
 - R-FAT-01's next steps link to `/daily#checkin` and `/daily#exercise`. Please give the exercise card `id="exercise"`, and the sleep card `id="sleep"` (R-SLP-01 links to `/daily#sleep`).
 - Your POSTs should call the engine too. Use `from .engine_hooks import run_daily_engine` so our alerts refresh.
 - Today plan: a **skipped** check-in counts as done (`today.py` still uses `skipped = 0`).
@@ -120,9 +120,8 @@ nasa-hrp-ongoing
 ```
 - `GET /api/daily/summary?days=7` is ready for the assistant context. It never contains `notePrivate`.
 
-### For Shahd (manual steps)
-- Open PR `shahd/daily` → `feature/daily`: https://github.com/Shahd-Samaneh/astrocare/compare/feature/daily...shahd/daily?expand=1
-- Ask Nadia to review it, then merge.
+### Merging
+- `shahd/daily` → `feature/daily` → `main`. Without `gh`, PRs are opened from the GitHub compare page (`feature/daily...shahd/daily`) and reviewed by Nadia.
 
 ---
 
@@ -141,8 +140,8 @@ nasa-hrp-ongoing
 | S26 | Practice trial default: on until the first test **saved on this device**, then off. The user's own choice is remembered in `localStorage` (`astrocare.daily.attention.practice`), every access in try/catch. A false start during practice is shown but not counted. | The seeded history shouldn't count as "this person has done a test here". |
 | S27 | PVT counter: display only (`requestAnimationFrame`). The measured RT always comes from the controller's own `performance.now()` stamp, so it's identical with `prefers-reduced-motion` (static highlighted target, no counting). The frozen RT shows ~1 s. | Timing logic must not depend on the animation. |
 | S28 | KSS (Karolinska Sleepiness Scale) 1–9 or `null` (skipped), stored in **`daily_test_meta`**. Anchor labels for 1/3/5/7/9 follow the published scale. "Test again" returns to the intro and clears the rating. | A rating belongs to one test. |
-| S29 | `daily_test_meta(test_id, mode, sleepiness_kss, input_method, trial_offsets_ms)` was created once in 4c with all columns. No row = a quick test with no extra data (all simulated tests). | No schema migrations between steps. |
-| S30 | Extended mode: random waits of 2–10 s until 3 minutes have passed since the first real trial (the practice trial doesn't count towards the 3 minutes). If time runs out during a wait, the test ends there. A false start is counted but doesn't "repeat" a trial. | Spec. |
+| S29 | `daily_test_meta(test_id, mode, sleepiness_kss, input_method, trial_offsets_ms)` was created in one go, with all its columns, when the sleepiness rating was added. No row = a quick test with no extra data (all simulated tests). | No schema migrations between steps. |
+| S30 | Extended mode: random waits of 2–10 s until 3 minutes have passed since the first real trial (the practice trial doesn't count towards the 3 minutes). If time runs out during a wait, the test ends there. A false start is counted but doesn't "repeat" a trial. | Team decision for the Extended mode. |
 | S31 | **Interval note:** in both modes the time between a response and the next stimulus is the ~1 s frozen-RT display **plus** the random wait (so 3–9 s quick, 3–11 s extended). | Honest description of what the code does. |
 | S32 | PVT measures (server, `pvt_measures`) are computed for every test: mean RT, fastest/slowest 10 % mean (10 % = `round(n/10)`, at least 1 response), response speed = mean(1000/RT) in 1/s, lapses (≥ `pvt_lapse_ms`), false starts. They're shown for Extended only. | Standard PVT outcome set. With 5 trials, "10 %" is one response, so it's hidden for Quick. |
 | S33 | Baselines are **per mode** (`GET /api/tests/baseline?mode=`). With fewer than 3 same-mode tests, `building: true`: the UI shows "Building your baseline (n/3)", `withinRange` is `null`, and % vs baseline is labelled "preliminary". The ±10 % range from contract §5 is still computed for the API. R-FAT-01 and the 14-day chart use **quick** routine tests only. | Never compare a 3-minute test with 5-trial tests. |
@@ -150,7 +149,7 @@ nasa-hrp-ongoing
 | S35 | Input method = the first real response: `pointerType` mouse → `mouse`, touch/pen → `touch`, Space → `keyboard`. "Usual" = most common known input among the baseline tests. No note when that is unknown (the seeded tests have none). | Fair comparison without guessing. |
 | S36 | History table `withinRange` is computed per test against the same-mode baseline **as it was at that test's time**. The narrow min–max range of round 2 is replaced by S40. | Honest per-row verdict. The range method is a team choice ("experimental"). |
 | S37 | ~~A faster-than-usual result is also labelled "Outside your usual range".~~ Replaced by S41. | |
-| S38 | "Add to report": the button probes `GET /api/reports/items?pending=true` and is **hidden on 404**. On `shahd/daily` today it's hidden, because Noura's API is on `main` but not yet on `feature/daily`. I checked the exact payload (`kind: 'note'`, `title`, one-line `text`, `sourceFeature: 'daily'`, `refId`) against `origin/main` in a temporary worktree: 201 Created. Only test numbers and KSS are sent, never check-in notes. | Spec (hide on 404). |
+| S38 | "Add to report": the button probes `GET /api/reports/items?pending=true` and is **hidden on 404**. On `shahd/daily` today it's hidden, because Noura's API is on `main` but not yet on `feature/daily`. We checked the exact payload (`kind: 'note'`, `title`, one-line `text`, `sourceFeature: 'daily'`, `refId`) against `origin/main`: 201 Created. Only test numbers and KSS are sent, never check-in notes. | Team decision: hide the button when the API isn't there. |
 | S39 | `GET /api/tests` limit raised to 200 (the page loads 200: charts use the last 14 days, the table pages by 20). | History table. |
 | S40 | Usual range = **median ± max(10 % of the median, spread)**, spread = the largest distance of a baseline test from the median. Same rule with < 3 tests. The history table (per test, at its own time) and both chart bands use the same server range. | The min–max range of 3–7 tests was so narrow that ordinary days showed ✗. This range always contains every baseline test and is never narrower than ±10 %. Still a team choice ("experimental"). |
 | S41 | New `rangeStatus`: `within` · `faster` · `slower` (above the range, < `attention_slower_pct`) · `flagged` (slower by ≥ `attention_slower_pct`). Badges: "Within your usual range" (good), "Faster than usual" (info), "A little slower than usual" (neutral), "Slower than usual" (review: the only flagged one). Table: ✓ / ✓ faster / a little slower / ✗ slower. `withinRange` stays for compatibility. | A faster result must never read as a problem; only a slowdown of ≥ 15 % is flagged, the same threshold as R-FAT-01. |
@@ -159,9 +158,9 @@ nasa-hrp-ongoing
 - **KSS:** Åkerstedt T, Gillberg M. *Subjective and objective sleepiness in the active individual.* International Journal of Neuroscience, 1990; 52(1–2): 29–37. Cited in docs and the report only; there's no URL in `app/src`.
 - PVT outcome measures (mean RT, fastest/slowest 10 %, 1/RT, lapses ≥ 500 ms) follow common PVT reporting conventions. Our 3-minute Extended mode is **not** a validated PVT-B implementation, and the UI says "Experimental, not validated".
 
-### Browser check (step 6)
-- Ran with headless Edge, driven by a DevTools-protocol script (in the scratchpad, not committed).
-- Your `npm run dev` was already holding port 8000 (auto-reloading API + Vite), so `npm run start` couldn't bind. I tested against that server with a fresh `npm run build`, and left your dev server running.
+### Browser check
+- Ran with headless Edge, driven by a local DevTools-protocol script (not committed).
+- A running `npm run dev` already held port 8000 (auto-reloading API + Vite), so the check ran against that server with a fresh `npm run build`.
 - Results:
 
 | State | Result |
