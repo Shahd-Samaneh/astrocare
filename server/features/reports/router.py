@@ -11,9 +11,9 @@ from fastapi import APIRouter, HTTPException, Response
 from pydantic import Field
 
 from server.core import db
-from server.core.config import app_config, iso, utcnow
+from server.core.config import iso, utcnow
 from server.core.models import ApiModel, Report, ReportSection, ReportStatus
-from server.core.status import build_status
+
 
 from . import service
 
@@ -79,21 +79,29 @@ def create_report(body: ReportIn) -> Report:
     return rep
 
 
-# ---- comms (unchanged for now; rebuilt in noura/comms) -----------------------------
+# ---- comms window ------------------------------------------------------------------
 class CommsStatus(ApiModel):
-    local_mode: bool
-    next_comm_window_ts: str
+    connected: bool
+    simulated_window: bool
+    next_window_ts: str
+    window_duration_min: int
+    queued_count: int
     signal_delay_sec: int
-    last_sync_ts: str
-    outbox: list[Report]
+    last_window_ts: Optional[str] = None
+
+
+class SimulatedWindow(ApiModel):
+    window_id: str
+    opened_ts: str
+    sent_report_ids: list[str]
 
 
 @router.get("/comms")
 def comms() -> CommsStatus:
-    s = build_status()
-    outbox = [Report.model_validate(r) for r in db.query("reports", "status = 'queued'", order_by="created_ts")]
-    return CommsStatus(
-        local_mode=s.local_mode, next_comm_window_ts=s.next_comm_window_ts,
-        signal_delay_sec=int(app_config()["comms"]["signal_delay_sec"]),
-        last_sync_ts=s.last_sync_ts, outbox=outbox,
-    )
+    return CommsStatus.model_validate(service.get_comms_status())
+
+
+@router.post("/comms/simulate-window")
+def simulate_window() -> SimulatedWindow:
+    """Demo only: opens the comm window now and sends every queued report."""
+    return SimulatedWindow.model_validate(service.simulate_window())
