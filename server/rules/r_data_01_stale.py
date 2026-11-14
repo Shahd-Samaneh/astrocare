@@ -83,7 +83,7 @@ class StaleDataRule(Rule):
             factors.append("Spot check not taken yet today")
             cuff = bp_sensor.name.lower() if bp_sensor else "blood pressure cuff"
             cuff_state = f" (it is {bp_sensor.status.replace('_', ' ')})" if bp_sensor and bp_sensor.status != "connected" else ""
-            steps.append(NextStep(text=f"Check the {cuff}{cuff_state}"))
+            steps.append(NextStep(text=f"Check the {cuff}{cuff_state}", resource_id="eq-bp-cuff"))
             steps.append(NextStep(text="Enter a manual blood pressure reading"))
 
         factors += ["Sensor removed for exercise or hygiene", "Battery depleted"]
