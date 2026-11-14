@@ -147,3 +147,72 @@ def test_kss_valid_values_are_stored(c, kss):
 @pytest.mark.parametrize("kss", [0, 10, -1])
 def test_kss_out_of_range_is_rejected(c, kss):
     assert c.post("/api/tests", json={"trialsMs": [300], "sleepinessKss": kss}).status_code == 422
+
+
+# ---- extended mode: PVT outcome measures -------------------------------------------------
+def test_pvt_measures_on_five_trials():
+    from server.features.daily.attention_stats import pvt_measures
+
+    m = pvt_measures([200, 250, 300, 400, 1000], false_starts=1)
+    assert m.n == 5
+    assert m.mean_ms == 430.0
+    assert m.fastest10_mean_ms == 200.0  # 10 % of 5 rounds to 0 → at least 1 response
+    assert m.slowest10_mean_ms == 1000.0
+    # mean of 1/RT in 1/s: (5 + 4 + 3.333 + 2.5 + 1) / 5
+    assert m.response_speed == pytest.approx((5 + 4 + 1000 / 300 + 2.5 + 1) / 5, abs=1e-3)
+    assert m.lapses == 1 and m.false_starts == 1
+
+
+def test_pvt_measures_ten_percent_of_twenty():
+    from server.features.daily.attention_stats import pvt_measures
+
+    rts = [300.0] * 16 + [200.0, 210.0] + [600.0, 700.0]
+    m = pvt_measures(rts)
+    assert m.fastest10_mean_ms == 205.0  # 2 fastest
+    assert m.slowest10_mean_ms == 650.0  # 2 slowest
+    assert m.lapses == 2
+
+
+def test_extended_post_returns_measures_and_stores_mode(c):
+    trials = [300 + i for i in range(20)]
+    offsets = [5000.0 * (i + 1) for i in range(20)]
+    r = c.post("/api/tests", json={"trialsMs": trials, "mode": "extended", "trialOffsetsMs": offsets})
+    assert r.status_code == 201
+    t = r.json()["test"]
+    assert t["mode"] == "extended"
+    assert t["measures"]["n"] == 20 and t["measures"]["fastest10MeanMs"] == 300.5
+    stored = c.get("/api/tests?n=1").json()[0]
+    assert stored["mode"] == "extended" and stored["trialOffsetsMs"] == offsets
+
+
+def test_offsets_must_match_trials(c):
+    r = c.post("/api/tests", json={"trialsMs": [300, 310], "trialOffsetsMs": [1000.0]})
+    assert r.status_code == 422
+
+
+# ---- same-mode baseline and "building" ---------------------------------------------------
+def test_baseline_is_per_mode(c):
+    for days_ago in (3, 4):
+        ts = iso(utcnow() - timedelta(days=days_ago))
+        c.post("/api/tests", json={"trialsMs": [400, 410, 420], "mode": "extended", "ts": ts})
+    quick = c.get("/api/tests/baseline").json()
+    ext = c.get("/api/tests/baseline?mode=extended").json()
+    assert quick["mode"] == "quick" and quick["n"] == 7 and quick["building"] is False
+    assert quick["medianMs"] == pytest.approx(285, abs=10)  # extended tests never enter it
+    assert ext["mode"] == "extended" and ext["n"] == 2 and ext["medianMs"] == 410
+    assert ext["building"] is True and ext["needed"] == 3
+
+
+def test_first_extended_test_is_building_baseline(c):
+    r = c.post("/api/tests", json={"trialsMs": [300, 320, 340], "mode": "extended"}).json()
+    assert r["baseline"]["n"] == 0 and r["baseline"]["building"] is True
+    assert r["withinRange"] is None and r["pctVsBaseline"] is None
+
+
+def test_building_baseline_gives_no_verdict(c):
+    ts = iso(utcnow() - timedelta(days=3))
+    c.post("/api/tests", json={"trialsMs": [400, 410, 420], "mode": "extended", "ts": ts})
+    r = c.post("/api/tests", json={"trialsMs": [800, 810, 820], "mode": "extended"}).json()
+    assert r["baseline"]["n"] == 1 and r["baseline"]["building"] is True
+    assert r["pctVsBaseline"] is not None  # shown as preliminary
+    assert r["withinRange"] is None

@@ -22,6 +22,7 @@ export interface DailyCognitiveTest extends CognitiveTest {
   inputMethod?: InputMethod | null;
   /** Response time since the test started, per trial (ms). */
   trialOffsetsMs?: number[] | null;
+  measures?: PvtMeasures | null;
 }
 
 export interface AttentionBaseline {
@@ -30,6 +31,11 @@ export interface AttentionBaseline {
   rangeLowMs: number | null;
   rangeHighMs: number | null;
   testIds: string[];
+  mode?: TestMode;
+  /** Fewer than `needed` tests of this mode: "Building your baseline (n/3)". */
+  building?: boolean;
+  needed?: number;
+  usualInputMethod?: InputMethod | null;
 }
 
 /** From the sleep log: the last sleep session that ended before the test. */
@@ -54,6 +60,19 @@ export interface NewTest {
   context?: TestContext;
   relatedAlertId?: string;
   sleepinessKss?: number | null;
+  mode?: TestMode;
+  trialOffsetsMs?: number[];
+}
+
+export interface PvtMeasures {
+  meanMs: number;
+  fastest10MeanMs: number;
+  slowest10MeanMs: number;
+  /** Mean of 1/RT, in 1/s. */
+  responseSpeed: number;
+  lapses: number;
+  falseStarts: number;
+  n: number;
 }
 
 export interface NasaSource {
@@ -130,6 +149,7 @@ export interface DailySummary {
 export const paths = {
   tests: (n = 10) => `/tests?n=${n}`,
   baseline: '/tests/baseline',
+  baselineFor: (mode: TestMode) => `/tests/baseline?mode=${mode}`,
   summary: (days = 7) => `/daily/summary?days=${days}`,
   sources: '/daily/sources',
   thresholds: '/daily/thresholds',

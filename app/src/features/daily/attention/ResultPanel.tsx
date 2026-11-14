@@ -24,10 +24,20 @@ function pctText(pct: number | null) {
 export function ResultPanel({ result }: { result: TestResult }) {
   const { test, pctVsBaseline, withinRange, baseline } = result;
   const sleepContext = result.sleepContext ?? { sleptHours: null, hoursAwake: null, source: null };
+  const extended = test.mode === 'extended';
+  const building = baseline.building ?? false;
+  const m = test.measures;
   return (
     <div className={styles.result}>
       <div className={styles.resultHead}>
-        <RangeBadge withinRange={withinRange} />
+        {building ? (
+          <Badge variant="neutral">
+            Building your baseline ({baseline.n}/{baseline.needed ?? 3})
+          </Badge>
+        ) : (
+          <RangeBadge withinRange={withinRange} />
+        )}
+        {extended && <Badge variant="pink">Extended · Experimental, not validated</Badge>}
         {test.context === 'retest' && <Badge variant="info">Retest</Badge>}
       </div>
       <dl className={styles.stats}>
@@ -38,7 +48,7 @@ export function ResultPanel({ result }: { result: TestResult }) {
           </dd>
         </div>
         <div className={styles.stat}>
-          <dt>vs your baseline</dt>
+          <dt>vs your baseline{building ? ' (preliminary)' : ''}</dt>
           <dd>
             <span className={styles.statValue}>{pctText(pctVsBaseline)}</span>
             {baseline.medianMs != null && (
@@ -50,7 +60,7 @@ export function ResultPanel({ result }: { result: TestResult }) {
           <dt>Lapses</dt>
           <dd>
             <span className={styles.statValue}>{test.lapses}</span>
-            <span className={styles.statSub}> of {test.trialsMs.length}</span>
+            <span className={styles.statSub}> of {test.trialsMs.length} responses</span>
           </dd>
         </div>
         <div className={styles.stat}>
@@ -60,6 +70,42 @@ export function ResultPanel({ result }: { result: TestResult }) {
           </dd>
         </div>
       </dl>
+      {extended && m && (
+        <dl className={styles.stats} aria-label="Extended test measures">
+          <div className={styles.stat}>
+            <dt>Mean RT</dt>
+            <dd>
+              <span className={styles.statValue}>{Math.round(m.meanMs)}</span> ms
+            </dd>
+          </div>
+          <div className={styles.stat}>
+            <dt>Fastest 10 %</dt>
+            <dd>
+              <span className={styles.statValue}>{Math.round(m.fastest10MeanMs)}</span> ms
+            </dd>
+          </div>
+          <div className={styles.stat}>
+            <dt>Slowest 10 %</dt>
+            <dd>
+              <span className={styles.statValue}>{Math.round(m.slowest10MeanMs)}</span> ms
+            </dd>
+          </div>
+          <div className={styles.stat}>
+            <dt>Response speed</dt>
+            <dd>
+              <span className={styles.statValue}>{m.responseSpeed.toFixed(2)}</span> 1/s
+            </dd>
+          </div>
+        </dl>
+      )}
+      {building && (
+        <p className={styles.meta}>
+          Building your baseline ({baseline.n}/{baseline.needed ?? 3}):{' '}
+          {extended ? 'extended' : 'quick'} tests are only compared with tests of the same length.
+          After {baseline.needed ?? 3} earlier tests you’ll see whether a result is within your
+          usual range.
+        </p>
+      )}
       <p className={styles.meta}>
         Trials: {test.trialsMs.map((x) => `${Math.round(x)} ms`).join(' · ')}
         {baseline.rangeLowMs != null && baseline.rangeHighMs != null && (

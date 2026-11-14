@@ -1,17 +1,21 @@
-// Owner: Shahd. State machine for the 5-trial reaction test (PVT-style).
+// Owner: Shahd. State machine for the reaction test (PVT-style), two modes:
+//   quick     5 trials, random 2–8 s waits (≈ 1 min). A false start repeats that trial.
+//   extended  random 2–10 s waits until 3 minutes have passed (experimental, not validated).
 //
-//   [practice trial, not counted] → waiting (random 2–8 s) → stimulus → response → feedback
-//   → next trial … → done
-//   A response during "waiting" is a false start: it is counted and that trial repeats
-//   (during the practice trial it is shown but not counted).
+//   [practice trial, not counted] → waiting → stimulus → response → feedback → … → done
+//   A response during "waiting" is a false start: it is counted (not during practice).
 //   No response within NO_RESPONSE_MS records NO_RESPONSE_MS (a lapse) so the test can't hang.
 // Timing uses performance.now(). The stimulus time is taken in the animation frame
-// that paints the stimulus, so render time isn't counted against the user.
+// that paints the stimulus, so render time isn't counted against the user. Each response
+// also records its offset from the start of the real test (for the time-on-task chart).
 import { useEffect, useReducer, useRef, useState } from 'react';
+import type { TestMode } from '../api.attention';
 
 export const TRIALS = 5;
 export const MIN_DELAY_MS = 2000;
 export const MAX_DELAY_MS = 8000;
+export const EXTENDED_MAX_DELAY_MS = 10000;
+export const EXTENDED_DURATION_MS = 3 * 60 * 1000;
 export const NO_RESPONSE_MS = 5000;
 const FEEDBACK_MS = 1000; // the frozen reaction time stays on screen ~1 s
 const FALSE_START_MS = 1500;
@@ -20,22 +24,42 @@ export type Phase = 'idle' | 'waiting' | 'stimulus' | 'feedback' | 'falseStart' 
 
 export interface ReactionState {
   phase: Phase;
+  mode: TestMode;
   trialsMs: number[];
+  /** Response time since the real test started, one per trial (ms). */
+  offsetsMs: number[];
   falseStarts: number;
   lastMs?: number;
   /** True while the practice trial runs (its result is never recorded). */
   practicing: boolean;
   /** The feedback being shown is for the practice trial. */
   lastWasPractice?: boolean;
+  /** performance.now() when the real (non-practice) test started. */
+  startedAt?: number;
 }
 
 export interface StartOptions {
   practice: boolean;
+  mode?: TestMode;
 }
 
-const INITIAL: ReactionState = { phase: 'idle', trialsMs: [], falseStarts: 0, practicing: false };
+export interface RawResult {
+  mode: TestMode;
+  trialsMs: number[];
+  offsetsMs: number[];
+  falseStarts: number;
+}
 
-type DoneHandler = (trialsMs: number[], falseStarts: number) => void;
+const INITIAL: ReactionState = {
+  phase: 'idle',
+  mode: 'quick',
+  trialsMs: [],
+  offsetsMs: [],
+  falseStarts: 0,
+  practicing: false,
+};
+
+type DoneHandler = (result: RawResult) => void;
 
 function createController(render: () => void, onDone: { current: DoneHandler }) {
   let state: ReactionState = INITIAL;
@@ -51,6 +75,17 @@ function createController(render: () => void, onDone: { current: DoneHandler }) 
     timer = undefined;
   };
 
+  const finish = () => {
+    clear();
+    set({ phase: 'done' });
+    onDone.current({
+      mode: state.mode,
+      trialsMs: state.trialsMs,
+      offsetsMs: state.offsetsMs,
+      falseStarts: state.falseStarts,
+    });
+  };
+
   const record = (ms: number) => {
     clear();
     if (state.practicing) {
@@ -58,13 +93,15 @@ function createController(render: () => void, onDone: { current: DoneHandler }) 
       timer = window.setTimeout(wait, FEEDBACK_MS);
       return;
     }
+    const offset = Math.round(performance.now() - (state.startedAt ?? performance.now()));
     const trialsMs = [...state.trialsMs, Math.round(ms)];
-    if (trialsMs.length >= TRIALS) {
-      set({ phase: 'done', trialsMs, lastMs: ms, lastWasPractice: false });
-      onDone.current(trialsMs, state.falseStarts);
+    const offsetsMs = [...state.offsetsMs, offset];
+    if (state.mode === 'quick' && trialsMs.length >= TRIALS) {
+      state = { ...state, trialsMs, offsetsMs, lastMs: ms, lastWasPractice: false };
+      finish();
       return;
     }
-    set({ phase: 'feedback', trialsMs, lastMs: ms, lastWasPractice: false });
+    set({ phase: 'feedback', trialsMs, offsetsMs, lastMs: ms, lastWasPractice: false });
     timer = window.setTimeout(wait, FEEDBACK_MS);
   };
 
@@ -79,8 +116,23 @@ function createController(render: () => void, onDone: { current: DoneHandler }) 
 
   function wait() {
     clear();
+    const now = performance.now();
+    if (!state.practicing && state.startedAt === undefined) state = { ...state, startedAt: now };
+    const extended = state.mode === 'extended' && !state.practicing;
+    if (extended && now - (state.startedAt as number) >= EXTENDED_DURATION_MS) {
+      finish();
+      return;
+    }
     set({ phase: 'waiting' });
-    const delay = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
+    const maxDelay = state.mode === 'extended' ? EXTENDED_MAX_DELAY_MS : MAX_DELAY_MS;
+    const delay = MIN_DELAY_MS + Math.random() * (maxDelay - MIN_DELAY_MS);
+    if (extended) {
+      const left = (state.startedAt as number) + EXTENDED_DURATION_MS - now;
+      if (delay >= left) {
+        timer = window.setTimeout(finish, Math.max(0, left)); // time is up during this wait
+        return;
+      }
+    }
     timer = window.setTimeout(showStimulus, delay);
   }
 
@@ -90,7 +142,7 @@ function createController(render: () => void, onDone: { current: DoneHandler }) 
     },
     start(opts: StartOptions = { practice: false }) {
       clear();
-      state = { ...INITIAL, practicing: opts.practice };
+      state = { ...INITIAL, mode: opts.mode ?? 'quick', practicing: opts.practice };
       wait();
     },
     respond() {

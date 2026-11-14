@@ -37,6 +37,17 @@ FEW_TESTS_PCT = 10  # range = median ± 10 % when the baseline has fewer than 3 
 
 
 # ---- contract extensions ----------------------------------------------------
+class PvtMeasures(ApiModel):
+    """Standard PVT outcome measures, computed on the server from trials_ms."""
+    mean_ms: float
+    fastest10_mean_ms: float  # mean of the fastest 10 % of responses (at least 1)
+    slowest10_mean_ms: float  # mean of the slowest 10 % of responses (at least 1)
+    response_speed: float  # mean of 1/RT, in 1/s
+    lapses: int
+    false_starts: int
+    n: int
+
+
 class DailyCognitiveTest(CognitiveTest):
     context: TestContext = "routine"
     related_alert_id: Optional[str] = None
@@ -46,6 +57,7 @@ class DailyCognitiveTest(CognitiveTest):
     sleepiness_kss: Optional[int] = Field(default=None, ge=1, le=9)  # Karolinska Sleepiness Scale
     input_method: Optional[InputMethod] = None
     trial_offsets_ms: Optional[list[float]] = None  # response time since test start, per trial
+    measures: Optional[PvtMeasures] = None  # derived, never stored
 
 
 class NextStepAction(ApiModel):
@@ -140,6 +152,7 @@ def with_context(tests: Iterable[CognitiveTest | dict[str, Any]]) -> list[DailyC
             "mission_day": mission_clock(parse_ts(data["ts"]))[1],
             **meta.get(data["id"], {}),
         }))
+        out[-1].measures = pvt_measures(out[-1].trials_ms, out[-1].false_starts)
     return out
 
 
@@ -162,40 +175,73 @@ def score_trials(trials_ms: list[float]) -> tuple[list[float], float, int]:
     return valid, float(statistics.median(valid)), sum(1 for x in valid if x >= lapse_ms)
 
 
+def pvt_measures(trials_ms: list[float], false_starts: int = 0) -> PvtMeasures | None:
+    """Mean RT, fastest/slowest 10 % mean RT, response speed (mean 1/RT in 1/s), lapses.
+
+    10 % = round(n / 10) responses, at least 1 (so a 5-trial test uses its single
+    fastest and slowest response). Lapse = RT ≥ pvt_lapse_ms.
+    """
+    rts = sorted(float(x) for x in trials_ms if x and x > 0)
+    if not rts:
+        return None
+    k = max(1, round(len(rts) / 10))
+    lapse_ms = float(daily_threshold("pvt_lapse_ms"))
+    return PvtMeasures(
+        mean_ms=round(statistics.fmean(rts), 1),
+        fastest10_mean_ms=round(statistics.fmean(rts[:k]), 1),
+        slowest10_mean_ms=round(statistics.fmean(rts[-k:]), 1),
+        response_speed=round(statistics.fmean(1000.0 / x for x in rts), 3),
+        lapses=sum(1 for x in rts if x >= lapse_ms),
+        false_starts=int(false_starts),
+        n=len(rts),
+    )
+
+
 # ---- baseline ---------------------------------------------------------------------
+MIN_BASELINE_TESTS = 3  # below this the UI says "Building your baseline (n/3)"
+
+
 class AttentionBaseline(ApiModel):
     median_ms: Optional[float] = None
     n: int = 0
     range_low_ms: Optional[float] = None
     range_high_ms: Optional[float] = None
     test_ids: list[str] = []
+    mode: TestMode = "quick"
+    building: bool = True  # fewer than MIN_BASELINE_TESTS tests of this mode
+    needed: int = MIN_BASELINE_TESTS
+    usual_input_method: Optional[InputMethod] = None  # most common known input among baseline tests
 
 
-def _routine(tests: Iterable[DailyCognitiveTest]) -> list[DailyCognitiveTest]:
-    return [t for t in tests if t.context == "routine"]
+def _routine(tests: Iterable[DailyCognitiveTest], mode: TestMode = "quick") -> list[DailyCognitiveTest]:
+    return [t for t in tests if t.context == "routine" and t.mode == mode]
 
 
-def baseline_from(tests: list[DailyCognitiveTest], now: datetime) -> AttentionBaseline:
-    """Median of the `attention_baseline_n` newest routine tests older than 48 h."""
+def baseline_from(tests: list[DailyCognitiveTest], now: datetime, mode: TestMode = "quick") -> AttentionBaseline:
+    """Median of the `attention_baseline_n` newest routine tests *of the same mode* older than 48 h."""
     n_max = int(daily_threshold("attention_baseline_n"))
     cutoff = now - timedelta(hours=RECENT_HOURS)
-    older = sorted((t for t in _routine(tests) if parse_ts(t.ts) < cutoff), key=lambda t: t.ts, reverse=True)[:n_max]
+    older = sorted((t for t in _routine(tests, mode) if parse_ts(t.ts) < cutoff),
+                   key=lambda t: t.ts, reverse=True)[:n_max]
     if not older:
-        return AttentionBaseline()
+        return AttentionBaseline(mode=mode)
     medians = [t.median_ms for t in older]
     med = float(statistics.median(medians))
     if len(older) >= 3:
         low, high = float(min(medians)), float(max(medians))
     else:
         low, high = med * (1 - FEW_TESTS_PCT / 100), med * (1 + FEW_TESTS_PCT / 100)
+    inputs = [t.input_method for t in older if t.input_method]
+    usual = max(set(inputs), key=inputs.count) if inputs else None
     return AttentionBaseline(median_ms=med, n=len(older), range_low_ms=low, range_high_ms=high,
-                             test_ids=[t.id for t in older])
+                             test_ids=[t.id for t in older], mode=mode,
+                             building=len(older) < MIN_BASELINE_TESTS, usual_input_method=usual)
 
 
-def recent_routine(tests: list[DailyCognitiveTest], now: datetime) -> list[DailyCognitiveTest]:
-    """Routine tests in the last 48 h (up to `now`), oldest first."""
+def recent_routine(tests: list[DailyCognitiveTest], now: datetime, mode: TestMode = "quick") -> list[DailyCognitiveTest]:
+    """Routine tests of one mode in the last 48 h (up to `now`), oldest first."""
     cutoff = now - timedelta(hours=RECENT_HOURS)
-    return sorted((t for t in _routine(tests) if cutoff <= parse_ts(t.ts) <= now), key=lambda t: t.ts)
+    return sorted((t for t in _routine(tests, mode) if cutoff <= parse_ts(t.ts) <= now), key=lambda t: t.ts)
 
 
 def pct_vs(value: float, base: AttentionBaseline) -> float | None:

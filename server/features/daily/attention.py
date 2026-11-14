@@ -21,7 +21,7 @@ from server.core.models import ApiModel
 from server.core.status import mission_clock
 
 from .attention_stats import (
-    AttentionBaseline, DailyCognitiveTest, TestContext, baseline_from, load_tests, pct_vs,
+    AttentionBaseline, DailyCognitiveTest, TestContext, TestMode, baseline_from, load_tests, pct_vs, pvt_measures,
     recent_routine, score_trials, set_test_context, set_test_meta, within,
 )
 from .engine_hooks import run_daily_engine
@@ -29,12 +29,17 @@ from .engine_hooks import run_daily_engine
 router = APIRouter()
 
 
+MAX_TRIALS = 120  # an extended 3-minute test has ~20-40 responses
+
+
 class TestIn(ApiModel):
-    trials_ms: list[float] = Field(min_length=1, max_length=20)
+    trials_ms: list[float] = Field(min_length=1, max_length=MAX_TRIALS)
     false_starts: int = Field(default=0, ge=0)
     context: TestContext = "routine"
     related_alert_id: Optional[str] = None
+    mode: TestMode = "quick"  # 'extended' = 3 minutes, experimental, not validated
     sleepiness_kss: Optional[int] = Field(default=None, ge=1, le=9)  # KSS 1–9, optional
+    trial_offsets_ms: Optional[list[float]] = Field(default=None, max_length=MAX_TRIALS)
     ts: Optional[str] = None  # tests and backfill only; the UI never sends it
 
 
@@ -70,8 +75,8 @@ def list_tests(n: int = Query(10, gt=0, le=100)) -> list[DailyCognitiveTest]:
 
 
 @router.get("/tests/baseline")
-def get_baseline() -> AttentionBaseline:
-    return baseline_from(load_tests(), utcnow())
+def get_baseline(mode: TestMode = Query("quick")) -> AttentionBaseline:
+    return baseline_from(load_tests(), utcnow(), mode=mode)
 
 
 @router.post("/tests", status_code=201)
@@ -80,6 +85,8 @@ def add_test(body: TestIn) -> TestResult:
         valid, median, lapses = score_trials(body.trials_ms)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    if body.trial_offsets_ms is not None and len(body.trial_offsets_ms) != len(body.trials_ms):
+        raise HTTPException(status_code=422, detail="trialOffsetsMs must have one value per trial")
     if body.context == "retest" and body.related_alert_id and not db.get("alerts", body.related_alert_id):
         raise HTTPException(status_code=404, detail=f"Unknown alert {body.related_alert_id}")
 
@@ -89,15 +96,20 @@ def add_test(body: TestIn) -> TestResult:
         false_starts=body.false_starts, context=body.context,
         related_alert_id=body.related_alert_id if body.context == "retest" else None,
         mission_day=mission_clock(parse_ts(ts))[1], sleepiness_kss=body.sleepiness_kss,
+        mode=body.mode, trial_offsets_ms=body.trial_offsets_ms if valid == [float(x) for x in body.trials_ms] else None,
     )
+    test.measures = pvt_measures(test.trials_ms, test.false_starts)
     # Baseline before inserting: the new test never counts towards its own baseline.
-    base = baseline_from(load_tests(), parse_ts(ts))
+    base = baseline_from(load_tests(), parse_ts(ts), mode=test.mode)
     db.insert("cognitive_tests", test.model_dump())  # extra fields are ignored by db.insert
     set_test_context(test.id, test.context, test.related_alert_id)
-    set_test_meta(test.id, mode=test.mode, sleepiness_kss=test.sleepiness_kss)
+    set_test_meta(test.id, mode=test.mode, sleepiness_kss=test.sleepiness_kss,
+                  trial_offsets_ms=test.trial_offsets_ms)
     db.log_action("crew", "attention_test" if test.context == "routine" else "attention_retest", test.id)
     run_daily_engine()
-    return TestResult(test=test, pct_vs_baseline=pct_vs(median, base), within_range=within(median, base),
+    # While the same-mode baseline is still building (< 3 tests), no within/outside verdict.
+    return TestResult(test=test, pct_vs_baseline=pct_vs(median, base),
+                      within_range=None if base.building else within(median, base),
                       baseline=base, sleep_context=sleep_context_at(ts))
 
 

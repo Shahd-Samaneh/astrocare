@@ -16,6 +16,7 @@ import {
   type DailyCognitiveTest,
   type DailySummary,
   type DailyThresholds,
+  type TestMode,
   type TestResult,
 } from '../api.attention';
 import { HistoryChart } from '../attention/HistoryChart';
@@ -30,14 +31,13 @@ import {
   markFirstTestDone,
   savePracticeChoice,
   useReactionTest,
+  type RawResult,
 } from '../attention/useReactionTest';
 import styles from '../attention/Attention.module.css';
 import { NasaBasis } from '../common/NasaBasis';
 
 type Saving =
-  | { state: 'idle' }
-  | { state: 'saving' }
-  | { state: 'error'; message: string; trials: number[]; falseStarts: number };
+  { state: 'idle' } | { state: 'saving' } | { state: 'error'; message: string; raw: RawResult };
 
 const WHY =
   'Tiredness can slow reactions before you notice it yourself. A one-minute test, compared with your own usual range, ' +
@@ -58,14 +58,21 @@ export default function AttentionCheck() {
   const [saving, setSaving] = useState<Saving>({ state: 'idle' });
   const [practice, setPractice] = useState(loadPracticeDefault);
   const [kss, setKss] = useState<number | null | undefined>(undefined);
+  const [mode, setMode] = useState<TestMode>('quick');
 
   const save = useCallback(
-    async (trialsMs: number[], falseStarts: number) => {
+    async (raw: RawResult) => {
+      if (!raw.trialsMs.length) {
+        setSaving({ state: 'error', message: 'no responses were recorded', raw });
+        return;
+      }
       setSaving({ state: 'saving' });
       try {
         const r = await postTest({
-          trialsMs,
-          falseStarts,
+          trialsMs: raw.trialsMs,
+          falseStarts: raw.falseStarts,
+          mode: raw.mode,
+          trialOffsetsMs: raw.offsetsMs,
           sleepinessKss: kss ?? null,
           ...(retestId ? { context: 'retest' as const, relatedAlertId: retestId } : {}),
         });
@@ -77,7 +84,7 @@ export default function AttentionCheck() {
         summary.reload();
       } catch (e) {
         const message = e instanceof ApiError ? e.message : String(e);
-        setSaving({ state: 'error', message, trials: trialsMs, falseStarts });
+        setSaving({ state: 'error', message, raw });
       }
     },
     [retestId, kss, history, baseline, summary],
@@ -96,7 +103,7 @@ export default function AttentionCheck() {
   const start = () => {
     setResult(undefined);
     setSaving({ state: 'idle' });
-    test.start({ practice });
+    test.start({ practice, mode });
   };
 
   const dateText = new Date().toLocaleDateString('en-GB', {
@@ -130,7 +137,13 @@ export default function AttentionCheck() {
       <div className={styles.column}>
         <Card
           title={running ? 'Test in progress' : result ? 'Your result' : 'Reaction-time test'}
-          subtitle={running ? 'Esc cancels' : `${TRIALS} trials, about 1 minute`}
+          subtitle={
+            running
+              ? 'Esc cancels'
+              : mode === 'extended'
+                ? '3 minutes · Experimental, not validated'
+                : `${TRIALS} trials, about 1 minute`
+          }
         >
           {running ? (
             <TestRunner state={test.state} onRespond={respond} onCancel={cancel} />
@@ -139,7 +152,7 @@ export default function AttentionCheck() {
           ) : saving.state === 'error' ? (
             <ErrorState
               message={`Your result was not saved: ${saving.message}`}
-              onRetry={() => save(saving.trials, saving.falseStarts)}
+              onRetry={() => save(saving.raw)}
             />
           ) : result ? (
             <>
@@ -164,11 +177,59 @@ export default function AttentionCheck() {
                 A light will appear after a random wait. Respond as fast as you can by clicking,
                 tapping or pressing <kbd>Space</kbd>.
               </p>
+              <fieldset className={styles.modes}>
+                <legend className="sr-only">Test length</legend>
+                <label className={styles.modeOption}>
+                  <input
+                    type="radio"
+                    name="pvt-mode"
+                    value="quick"
+                    checked={mode === 'quick'}
+                    onChange={() => setMode('quick')}
+                  />
+                  <span>
+                    <span className={styles.modeTitle}>Quick</span>
+                    <br />
+                    <span className={styles.modeDesc}>{TRIALS} trials, ~1 min. The default.</span>
+                  </span>
+                </label>
+                <label className={styles.modeOption}>
+                  <input
+                    type="radio"
+                    name="pvt-mode"
+                    value="extended"
+                    checked={mode === 'extended'}
+                    onChange={() => setMode('extended')}
+                  />
+                  <span>
+                    <span className={styles.modeTitle}>Extended (3 minutes)</span>
+                    <br />
+                    <span className={styles.modeDesc}>
+                      Experimental, not validated. More measures, compared only with your other
+                      extended tests.
+                    </span>
+                  </span>
+                </label>
+              </fieldset>
               <ul className={styles.facts}>
-                <li>{TRIALS} trials, each after a wait of 2–8 seconds: about 1 minute in total.</li>
-                <li>Responding before the light is a false start, and that trial repeats.</li>
+                {mode === 'quick' ? (
+                  <>
+                    <li>
+                      {TRIALS} trials, each after a wait of 2–8 seconds: about 1 minute in total.
+                    </li>
+                    <li>Responding before the light is a false start, and that trial repeats.</li>
+                  </>
+                ) : (
+                  <>
+                    <li>
+                      Lights keep coming after waits of 2–10 seconds until 3 minutes have passed.
+                    </li>
+                    <li>Responding before the light is a false start. It is counted.</li>
+                  </>
+                )}
                 <li>
-                  Your median time is compared with your own usual range, not with other people.
+                  Your median time is compared with your own usual range for the same test length,
+                  not with other people.
                 </li>
               </ul>
               <SleepinessQuestion value={kss} onChange={setKss} />
@@ -185,7 +246,11 @@ export default function AttentionCheck() {
               </label>
               <div className={styles.row}>
                 <Button onClick={start} icon={<Timer size={16} />} autoFocus>
-                  {retestId ? 'Start retest' : 'Start'}
+                  {retestId
+                    ? 'Start retest'
+                    : mode === 'extended'
+                      ? 'Start extended test'
+                      : 'Start'}
                 </Button>
               </div>
               <p className={styles.experimental} role="note">

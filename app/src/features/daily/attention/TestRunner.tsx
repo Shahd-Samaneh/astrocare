@@ -7,7 +7,7 @@
 // measured time always comes from the controller (useReactionTest), so timing is identical.
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../../shared/components';
-import { TRIALS, isRunning, type ReactionState } from './useReactionTest';
+import { EXTENDED_DURATION_MS, TRIALS, isRunning, type ReactionState } from './useReactionTest';
 import styles from './Attention.module.css';
 
 export interface TestRunnerProps {
@@ -19,7 +19,7 @@ export interface TestRunnerProps {
 const MESSAGE: Record<string, { big: string; small: string }> = {
   waiting: { big: 'Wait…', small: 'Respond as soon as the circle lights up.' },
   stimulus: { big: 'Now!', small: 'Click, tap or press Space.' },
-  falseStart: { big: 'Too soon', small: 'That was before the signal. This trial will repeat.' },
+  falseStart: { big: 'Too soon', small: 'That was before the signal. Wait for the next one.' },
 };
 
 function usePrefersReducedMotion(): boolean {
@@ -51,6 +51,33 @@ function CountingMs() {
     return () => window.cancelAnimationFrame(raf);
   }, []);
   return <>{String(Math.floor(ms)).padStart(3, '0')}</>;
+}
+
+function mmss(ms: number) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** Extended mode: elapsed time of the 3 minutes (updated 4× a second). */
+function ExtendedProgress({ startedAt, responses }: { startedAt?: number; responses: number }) {
+  const [now, setNow] = useState(() => performance.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(performance.now()), 250);
+    return () => window.clearInterval(id);
+  }, []);
+  const elapsed = startedAt === undefined ? 0 : Math.min(EXTENDED_DURATION_MS, now - startedAt);
+  return (
+    <>
+      <span
+        className={styles.progress}
+        aria-label={`Extended test: ${mmss(elapsed)} of ${mmss(EXTENDED_DURATION_MS)}, ${responses} responses`}
+      >
+        {mmss(elapsed)} / {mmss(EXTENDED_DURATION_MS)}
+      </span>
+      <progress className={styles.timeBar} max={EXTENDED_DURATION_MS} value={elapsed} aria-hidden />
+      <span className={styles.meta}>{responses} responses</span>
+    </>
+  );
 }
 
 export function TestRunner({ state, onRespond, onCancel }: TestRunnerProps) {
@@ -88,7 +115,9 @@ export function TestRunner({ state, onRespond, onCancel }: TestRunnerProps) {
         }
       : state.practicing && state.phase === 'falseStart'
         ? { big: 'Too soon', small: 'Practice: wait for the signal, then respond.' }
-        : (MESSAGE[state.phase] ?? MESSAGE.waiting);
+        : state.phase === 'falseStart' && state.mode === 'quick'
+          ? { big: 'Too soon', small: 'That was before the signal. This trial will repeat.' }
+          : (MESSAGE[state.phase] ?? MESSAGE.waiting);
   const progressLabel = state.practicing
     ? 'Practice: not counted'
     : `Trial ${trialNo} of ${TRIALS}`;
@@ -98,12 +127,17 @@ export function TestRunner({ state, onRespond, onCancel }: TestRunnerProps) {
       <div className={styles.runnerHead}>
         {state.practicing ? (
           <span className={`${styles.progress} ${styles.practice}`}>Practice: not counted</span>
+        ) : state.mode === 'extended' ? (
+          <ExtendedProgress startedAt={state.startedAt} responses={state.trialsMs.length} />
         ) : (
           <span className={styles.progress} aria-label={progressLabel}>
             Trial {trialNo}/{TRIALS}
           </span>
         )}
-        <ol className={styles.dots} aria-hidden>
+        <ol
+          className={`${styles.dots} ${state.mode === 'extended' ? styles.hidden : ''}`}
+          aria-hidden
+        >
           {Array.from({ length: TRIALS }, (_, i) => (
             <li
               key={i}
