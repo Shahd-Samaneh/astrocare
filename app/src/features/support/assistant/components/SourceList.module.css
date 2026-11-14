@@ -1,31 +1,74 @@
+/* thin divider, then "Sources:" and one small chip per source */
 .wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   border-top: 1px solid var(--border);
-  padding-top: 10px;
+  padding-top: 4px;
 }
 
 .heading {
-  margin: 0 0 6px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--text-faint);
 }
 
 .list {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  column-gap: 6px;
 }
 
 .item {
   display: flex;
-  gap: 8px;
-  font-size: 13px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* the 44px touch target around the small chip */
+.hit {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
+  min-width: 0;
+  max-width: 100%;
+  border-radius: var(--radius-pill);
+  color: inherit;
+  text-decoration: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-input);
+  background: var(--bg-chip);
+  font-size: 12px;
   line-height: 1.4;
+  color: var(--text-2);
+}
+
+.linked {
+  border-color: var(--local-border);
+  color: var(--accent-2);
+}
+
+.hit:hover .linked {
+  background: var(--bg-active);
+  color: var(--text);
 }
 
 .num {
@@ -36,6 +79,5 @@
 
 .title {
   min-width: 0;
-  color: var(--text-2);
   overflow-wrap: anywhere;
 }

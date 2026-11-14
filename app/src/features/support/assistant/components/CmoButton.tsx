@@ -1,4 +1,4 @@
-// "Add the question to the report for the CMO" (medication refusals) -> POST /api/reports/items.
+// "Add question to report for the CMO" (medication refusals) -> POST /api/reports/items.
 import { cmoReportItem } from '../reportItems';
 import { ReportButton } from './ReportButton';
 
@@ -6,10 +6,10 @@ export function CmoButton({ question, done, onDone }: { question: string; done?:
   return (
     <ReportButton
       item={cmoReportItem(question)}
-      label="Add the question to the report for the CMO"
+      label="Add question to report for the CMO"
       doneText="Added to the report for the CMO. It will be sent at the next comm window."
       what="question"
-      variant="warn"
+      variant="primary"
       done={done}
       onDone={onDone}
     />

@@ -4,40 +4,102 @@
   gap: 20px;
 }
 
+/* chat card on the start side (~2/3), side column on the end side; stacked under 900px */
 .layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  display: flex;
+  align-items: flex-start;
   gap: 20px;
-  align-items: start;
-}
-
-@media (max-width: 1100px) {
-  .layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 .chatCard {
+  flex: 2 1 0;
+  min-width: 0;
   min-height: 560px;
 }
 
 .side {
+  flex: 1 1 0;
+  min-width: 280px;
+  max-width: 380px;
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
 
-/* ready-made questions */
-.ready {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+@media (max-width: 900px) {
+  .layout {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .side {
+    min-width: 0;
+    max-width: none;
+  }
 }
 
-.readyBtn {
-  white-space: normal;
-  text-align: start;
-  font-weight: 500;
+.sideNote {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--border-input);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+/* chat card header: model status pill + clear */
+.headActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: min(360px, 55vw);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-input);
+  background: var(--bg-panel);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-2);
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+
+.pillReady .dot {
+  background: var(--ok);
+}
+
+.pillLoading {
+  color: var(--warn);
+  border-color: var(--warn-border);
+}
+
+.pillLoading .dot {
+  background: var(--warn);
+}
+
+.pillOff .dot {
+  background: var(--text-faint);
+}
+
+.iconBtn.iconBtn {
+  width: var(--tap-min);
+  padding: 0;
 }
 
 /* conversation */
@@ -63,35 +125,49 @@
   gap: 10px;
 }
 
-.msg {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-
-.avatar {
-  flex: none;
-  margin-top: 12px;
-  color: var(--text-faint);
-}
-
-.user .question {
-  margin: 0;
-  padding: 10px 14px;
-  border-radius: var(--radius-md);
-  background: var(--bg-active);
-  color: var(--text-on-active);
-  font-size: 14px;
-  white-space: pre-wrap;
-}
-
-.botBody {
-  flex: 1;
+/* bubbles: the question on the end side, the answer on the start side (flips in an RTL page) */
+.bubble {
+  max-width: 85%;
   min-width: 0;
   padding: 12px 14px;
-  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+}
+
+.user {
+  align-self: flex-end;
+  border-radius: var(--radius-lg) var(--radius-lg) 4px var(--radius-lg);
+  background: var(--bg-active);
+  border-color: var(--accent);
+}
+
+.bot {
+  align-self: flex-start;
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) 4px;
   background: var(--bg-panel);
-  border: 1px solid var(--border);
+  border-color: var(--border-strong);
+}
+
+/* the tail stays next to the speaker's side in an RTL page */
+:global([dir='rtl']) .user {
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) 4px;
+}
+
+:global([dir='rtl']) .bot {
+  border-radius: var(--radius-lg) var(--radius-lg) 4px var(--radius-lg);
+}
+
+.refusal {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+
+.question {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .answerWrap {
@@ -103,6 +179,7 @@
 .meta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -112,20 +189,32 @@
   color: var(--text-faint);
 }
 
-.refusal {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-  border-radius: var(--radius);
-  background: var(--warn-bg);
-  border: 1px solid var(--warn-border);
-}
-
 .missing {
   margin: 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--warn-border);
+  border-radius: var(--radius);
   font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.missing strong {
   color: var(--warn);
+}
+
+.healthNote {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pink);
+}
+
+.refusalActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 /* template / too slow / cut-off notice, right under the badge */
@@ -193,7 +282,33 @@
   color: var(--text-faint);
 }
 
-/* input */
+@media (max-width: 560px) {
+  .bubble {
+    max-width: 92%;
+  }
+}
+
+/* composer: ready-made chips just above the input */
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.ready {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.readyBtn {
+  white-space: normal;
+  text-align: start;
+  font-weight: 500;
+}
+
 .form {
   display: flex;
   gap: 10px;
@@ -202,17 +317,35 @@
 
 .input {
   flex: 1;
-  min-height: var(--tap-min);
+  min-width: 0;
+  height: 48px;
+  min-height: 48px;
+  max-height: 200px;
   resize: vertical;
-  padding: 10px 12px;
-  border-radius: var(--radius);
+  padding: 13px 14px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-input);
   background: var(--bg-panel);
   color: var(--text);
   font-size: 14px;
+  line-height: 20px;
 }
 
 .input::placeholder {
+  color: var(--text-faint);
+}
+
+.send.send {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: var(--radius-md);
+}
+
+.privacy {
+  margin: 0;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
