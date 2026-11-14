@@ -1,0 +1,156 @@
+.anchor {
+  scroll-margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+}
+
+.big {
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.factLabel {
+  font-size: 13px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ratingLabel {
+  font-size: 14px;
+  color: var(--text-2);
+  margin-bottom: 10px;
+}
+
+.rating {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ratingBtn {
+  min-height: 64px;
+  min-width: var(--tap-min);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.ratingBtn:hover:not(:disabled) {
+  background: var(--bg-active);
+}
+
+.ratingBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ratingBtn[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.ratingBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ratingNum {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.ratingWord {
+  font-size: 11px;
+}
+
+.err {
+  color: var(--danger-2);
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.manual {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  padding: 4px 20px;
+}
+
+.manualSummary {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap-min);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  padding: 8px 0 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.field input,
+.field select {
+  min-height: var(--tap-min);
+  padding: 0 12px;
+  background: var(--bg-panel);
+  color: var(--text);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius);
+  font: inherit;
+}
+
+.field input[aria-invalid='true'],
+.field select[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+@media (max-width: 560px) {
+  .rating {
+    gap: 6px;
+  }
+
+  .ratingWord {
+    display: none;
+  }
+}
