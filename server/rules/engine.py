@@ -17,6 +17,7 @@ from server.core.config import iso
 from server.core.models import Alert
 
 from .base import Rule, RuleContext
+from .resources import check_resource
 
 log = logging.getLogger("astrocare.rules")
 
@@ -55,10 +56,13 @@ def run_rules(ctx: RuleContext | None = None) -> list[Alert]:
         key = draft.dedupe_key or draft.title
         if _is_open_duplicate(rule.id, key):
             continue
+        # Stamp every step with resource availability (and CMO-lock medicines)
+        # so rules don't have to; see rules/resources.py.
+        steps = [check_resource(s, ctx.profile, ctx.resources, ctx.now) for s in draft.next_steps]
         alert = Alert(
             id=f"al-{uuid.uuid4().hex[:10]}", rule_id=rule.id, level=draft.level, ts=iso(ctx.now),
             title=draft.title, what_changed=draft.what_changed, data_used=draft.data_used,
-            missing=draft.missing, possible_factors=draft.possible_factors, next_steps=draft.next_steps,
+            missing=draft.missing, possible_factors=draft.possible_factors, next_steps=steps,
             status="new", sources=draft.sources or list(rule.sources),
         )
         db.insert("alerts", {**alert.model_dump(), "dedupe_key": key})
