@@ -24,3 +24,4 @@ data/reports/
 .DS_Store
 Thumbs.db
 *.log
+.claude/
