@@ -1,0 +1,67 @@
+title: Bio-Monitor: Keeping an eye on astronauts' vital signs
+url: https://asc-csa.gc.ca/eng/sciences/astroskin.asp
+id: csa-bio-monitor
+
+Bio-Monitor: Keeping an eye on astronauts' vital signs
+
+The Bio-Monitor is a wearable technology designed to fit into an astronaut's daily routine aboard the International Space Station (ISS) while monitoring and recording vital signs.
+
+This system, which includes a smart shirt, headband and dedicated tablet application, helps keep an eye on astronauts' health and enables new science by continuously measuring physiological data.
+
+Doing science in space is no easy task. To participate in health experiments, astronauts must use several medical devices including electrocardiographs, blood pressure cuffs, fingertip oxygen saturation monitors, and ankle-bracelet activity sensors.
+
+These devices are often bulky and invasive. Using them is disruptive and time-consuming.
+
+The Bio-Monitor simplifies the process by combining numerous devices into one set of easy-to-use smart garments that records vital sign data. The system measures the following:
+
+pulse and electrical activity of the heart
+
+breathing rate and volume
+
+The garments can also be worn during sleep and exercise. The system is designed to easily send information to the ground, where scientists can monitor the astronauts' health around the clock as they orbit the planet.
+
+Canadian Space Agency (CSA) astronaut David Saint-Jacques explains how the Bio-Monitor, a Canadian smart shirt system, measures and records astronauts' vital signs on the ISS. (Credits: CSA, NASA)
+
+Using the Bio-Monitor on the ISS allows scientists to:
+
+record astronauts' vital signs in a way that does not disturb daily activities or require lots of time or attention
+
+replace bigger equipment with a sleek all-in-one set of garments
+
+receive scientific data directly from space for faster analysis
+
+This system has the potential to help Canadians who are bedridden, housebound, or living in rural communities with limited access to medical support. It can also be worn by workers in dangerous environments such as mines, industrial sites, or factories.
+
+The commercial version of the Bio-Monitor shirt, Hexoskin, is used by hundreds of institutional partners for research purposes, in studies examining breathing disorders, cardiac and pulmonary diseases, rare diseases, stress, sleep, epilepsy, and other conditions. It also offers wearable sensing solutions for pediatric research. The Hexoskin Junior biometric shirts are used by research groups to study sleep patterns, respiratory health, and rare diseases in children 3 to 17 years old.
+
+The wearable technology system is designed to be as comfortable as a typical snug shirt. The shirt has adjustable straps to position small metal sensors against the skin in order to get a good reading.
+
+If an astronaut is about to exercise, he or she can use a tablet application to specify the type of activity and see his or her vital signs throughout the session.
+
+Once finished, the astronaut disconnects the battery pack and plugs it into a base, which downloads the data to Earth through the Station's communications system for scientific analysis.
+
+CSA astronaut David Saint-Jacques tries the Bio-Monitor, a new Canadian technology, for the first time in space. The innovative smart shirt system is designed to measure and record astronauts' vital signs. (Credit: CSA/NASA)
+
+Bio-Monitor: Canada's Smart Shirt for Space - Infographic - Text version
+
+This infographic features an image of Bio-Monitor, a "smart shirt" worn by astronauts during their missions to the ISS. Credit: CSA
+
+The Bio-Monitor system was launched into space in December 2018.
+
+Carré Technologies of Montreal, Quebec, developed Bio-Monitor for the CSA. Three additional Canadian companies lent their support:
+
+CALM Technologies (of Kingston, Ontario)
+
+engineering assistance to send the Bio-Monitor to space
+
+Xiphos Technologies (of Montreal, Quebec)
+
+a processor card that sends data from the ISS to Earth
+
+Katz Design Inc. (of Montreal, Quebec)
+
+Mechanical design, industrial design and full CAD development of the Bio-Monitor
+
+Testing technologies on the International Space Station
+
+Canadian Science on the International Space Station

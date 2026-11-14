@@ -10,7 +10,9 @@ from pydantic import Field
 from server.core.models import ApiModel
 
 RefusalReason = Literal["medication", "diagnosis"]
-AnswerMode = Literal["llm", "fallback"]
+# llm: the local model; fallback: template (model off / too slow);
+# alert / data: built in code from the open alert / the fixed facts (no model)
+AnswerMode = Literal["llm", "fallback", "alert", "data"]
 
 
 class AskIn(ApiModel):
@@ -23,6 +25,15 @@ class AssistantSource(ApiModel):
     url: Optional[str] = None
 
 
+class AnswerStep(ApiModel):
+    """One next step of the explained alert. `link` is an in-app path ("/daily#checkin"), only
+    when the alert's NextStep carries one (proposal A13: the field does not exist yet)."""
+
+    text: str
+    link: Optional[str] = None
+    locked_for_cmo: bool = Field(default=False, alias="lockedForCMO")
+
+
 class AssistantAnswer(ApiModel):
     answer: str
     sources: list[AssistantSource] = []
@@ -31,6 +42,9 @@ class AssistantAnswer(ApiModel):
     refusal_reason: Optional[RefusalReason] = None
     mode: AnswerMode
     latency_ms: int
+    note: Optional[str] = None           # small notice under the badge (template / slow / cut off)
+    alert_rule_id: Optional[str] = None  # mode "alert": the rule the answer explains
+    next_steps: list[AnswerStep] = []    # mode "alert" / alert template: the alert's next steps
 
 
 class AssistantPermissionsGroup(ApiModel):
@@ -66,6 +80,7 @@ class AssistantInfo(ApiModel):
     model_size_bytes: Optional[int] = None
     ram_bytes: Optional[int] = None
     avg_latency_ms: Optional[float] = None
+    avg_first_token_ms: Optional[float] = None
     tokens_per_sec: Optional[float] = None
     answers_logged: int = 0
     chunks_indexed: int = 0

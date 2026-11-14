@@ -1,0 +1,49 @@
+{
+  "_note": "SIMULATED mock in the contract shape (camelCase, as the endpoints return it). Used only when a source endpoint fails, or when ASTROCARE_ASSISTANT_MOCK=1 (tests).",
+  "alerts": [
+    {
+      "id": "al-mock-fat01",
+      "ruleId": "R-FAT-01",
+      "level": "review",
+      "ts": "2026-11-14T06:10:00Z",
+      "title": "Short sleep and slower attention",
+      "whatChanged": "Sleep averaged 5 h 20 m over the last 3 nights (your baseline is 7 h 05 m), and this morning's attention check median was 18% slower than your baseline.",
+      "dataUsed": ["sl-mock-1", "sl-mock-2", "sl-mock-3", "ct-mock-1"],
+      "missing": ["Blood pressure: no reading since the start of mission day 142"],
+      "possibleFactors": ["Several short nights in a row", "Shifted work schedule", "Cabin noise during the sleep period"],
+      "nextSteps": [
+        {"text": "Protect an 8-hour sleep opportunity tonight", "resourceId": null, "availability": null, "lockedForCMO": false},
+        {"text": "Repeat the attention check after rest", "resourceId": null, "availability": null, "lockedForCMO": false},
+        {"text": "Melatonin tablets: needs CMO review", "resourceId": "res-melatonin", "availability": "available", "lockedForCMO": true}
+      ],
+      "status": "new",
+      "sources": ["nasa-hrp-sleep-risk", "nasa-pvt-iss"]
+    }
+  ],
+  "latestReadings": [
+    {"metric": "heart_rate", "reading": {"value": 74, "unit": "bpm", "ts": "2026-11-14T07:50:00Z"}, "quality": "good", "ageMinutes": 5},
+    {"metric": "spo2", "reading": {"value": 97, "unit": "%", "ts": "2026-11-14T07:50:00Z"}, "quality": "good", "ageMinutes": 5},
+    {"metric": "skin_temp", "reading": {"value": 33.9, "unit": "°C", "ts": "2026-11-14T01:55:00Z"}, "quality": "stale", "ageMinutes": 360},
+    {"metric": "bp_sys", "reading": null, "quality": "missing", "ageMinutes": null},
+    {"metric": "bp_dia", "reading": null, "quality": "missing", "ageMinutes": null},
+    {"metric": "resp_rate", "reading": {"value": 15, "unit": "/min", "ts": "2026-11-14T07:50:00Z"}, "quality": "good", "ageMinutes": 5}
+  ],
+  "sleep": [
+    {"id": "sl-mock-5", "start": "2026-11-09T22:00:00Z", "end": "2026-11-10T05:10:00Z", "durationMin": 430, "awakenings": 1, "selfQuality": 4, "source": "simulated"},
+    {"id": "sl-mock-4", "start": "2026-11-10T22:10:00Z", "end": "2026-11-11T05:05:00Z", "durationMin": 415, "awakenings": 2, "selfQuality": 4, "source": "simulated"},
+    {"id": "sl-mock-3", "start": "2026-11-11T23:40:00Z", "end": "2026-11-12T05:00:00Z", "durationMin": 320, "awakenings": 3, "selfQuality": 2, "source": "simulated"},
+    {"id": "sl-mock-2", "start": "2026-11-12T23:50:00Z", "end": "2026-11-13T05:10:00Z", "durationMin": 320, "awakenings": 4, "selfQuality": 2, "source": "simulated"},
+    {"id": "sl-mock-1", "start": "2026-11-13T23:45:00Z", "end": "2026-11-14T05:05:00Z", "durationMin": 320, "awakenings": 3, "selfQuality": 2, "source": "simulated"}
+  ],
+  "tests": [
+    {"id": "ct-mock-2", "ts": "2026-11-12T07:00:00Z", "trialsMs": [281, 275, 290, 268, 285], "medianMs": 281, "lapses": 0, "falseStarts": 0},
+    {"id": "ct-mock-1", "ts": "2026-11-14T07:00:00Z", "trialsMs": [331, 345, 520, 322, 338], "medianMs": 338, "lapses": 1, "falseStarts": 0}
+  ],
+  "checkins": [
+    {"id": "ci-mock-1", "ts": "2026-11-13T20:00:00Z", "mood": 3, "stress": 4, "notePrivate": "PRIVATE-NOTE-MUST-NEVER-REACH-THE-MODEL", "skipped": false}
+  ],
+  "exercisePlan": [
+    {"id": "ex-mock-142", "day": 142, "type": "Resistive exercise (ARED)", "durationMin": 60, "equipmentId": "eq-ared", "alternatives": []}
+  ],
+  "todayPlan": {"missionDay": 142, "exerciseLogged": false, "attentionCheckDone": true, "checkInDone": false}
+}
