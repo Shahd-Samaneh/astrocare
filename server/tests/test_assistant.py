@@ -690,7 +690,7 @@ def test_citation_check_runs_in_the_ask_flow(client, fake_chat, mock_ctx, monkey
 
 
 # ---- token caps ------------------------------------------------------------------------
-def test_summary_questions_get_250_tokens_others_200(client, mock_ctx, monkeypatch):
+def test_summary_questions_get_180_tokens_others_200(client, mock_ctx, monkeypatch):
     seen = []
 
     def capture(system, user, **kw):
@@ -700,7 +700,7 @@ def test_summary_questions_get_250_tokens_others_200(client, mock_ctx, monkeypat
     monkeypatch.setattr(service, "retrieve", lambda q, k=None: [REF_HIT])
     client.post("/api/assistant/ask", json={"question": "What does my data from the last 7 days show?"})
     client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"})
-    assert seen == [250, 200]
+    assert seen == [180, 200]
 
 
 def test_dropped_citation_takes_its_joining_word_with_it():
@@ -740,3 +740,25 @@ def test_sentence_quoting_alert_factors_cites_the_alert(client, fake_chat, mock_
     body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
     assert [s["id"] for s in body["sources"]] == ["alert:al-mock-fat01"]
     assert body["answer"].endswith("schedule [1].")
+
+
+# ---- invented label lines ----------------------------------------------------------------
+def test_label_only_lines_are_removed(client, fake_chat, mock_ctx):
+    fake_chat.reply = ("Sleep loss can lead to fatigue [1].\n\nPossible link:\n\n**NOT A CONFIRMED CAUSE:**\n\n"
+                       "الخلاصة:\n\nNext steps:\n- Rest well tonight\nMISSING: none")
+    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    a = body["answer"]
+    assert "Possible link:" not in a and "NOT A CONFIRMED CAUSE" not in a and "الخلاصة" not in a
+    assert "Next steps:\n- Rest well tonight" in a  # a label that heads a list stays
+    assert "Sleep loss can lead to fatigue" in a
+
+
+def test_label_with_text_after_it_is_kept(client, fake_chat, mock_ctx):
+    fake_chat.reply = "Possible link: short sleep and slower attention.\nMISSING: none"
+    body = client.post("/api/assistant/ask", json={"question": "Why did I get the alert?"}).json()
+    assert body["answer"].startswith("Possible link: short sleep and slower attention")
+
+
+def test_hard_stop_is_120s():
+    from server.features.assistant.settings import setting
+    assert setting("assistant_max_answer_sec") == 120

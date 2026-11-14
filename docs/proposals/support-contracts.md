@@ -71,10 +71,10 @@ assistant_first_token_timeout_sec:
   note: "Time from the question to the first streamed token; with no token by then the assistant answers from the alert template. Also the longest allowed gap between two tokens. Raised from 20 s: on the demo laptop a streamed answer can start at ~22 s, and that is better than a template at 20 s."
 
 assistant_max_answer_sec:
-  value: 90
+  value: 120
   unit: s
   source: "Team decision (latency), not clinical"
-  note: "Hard stop for a streamed answer; the part written so far is kept and marked incomplete."
+  note: "Hard stop for a streamed answer; the part written so far is kept and marked incomplete. Raised from 90 s: at ~3 tokens/s a full summary took ~100 s on the demo laptop."
 
 assistant_top_k:
   value: 3
@@ -101,10 +101,10 @@ assistant_max_answer_tokens:
   note: "Upper bound on the local model's answer length (keeps the reply inside the timeout)."
 
 assistant_max_summary_tokens:
-  value: 250
+  value: 180
   unit: tokens
   source: "Team decision (latency), not clinical"
-  note: "Answer length cap for 'my data' summary questions (they cover 5 data areas); other questions use assistant_max_answer_tokens."
+  note: "Answer length cap for 'my data' summary questions; other questions use assistant_max_answer_tokens. 180 (was 250): a shorter answer matters more than completeness in the demo; the summary still gets the fixed fact lines for sleep, attention and vitals when the model leaves them out."
 
 assistant_citation_min_similarity:
   value: 0.775

@@ -160,6 +160,25 @@ _DATA_PHRASES = {
 }
 
 
+_LABEL_ONLY = re.compile(r"^[\s*_#>-]*([^\W\d_][\w\s,'()/&-]{0,40}?)\s*[:：]\s*[*_]*\s*$")
+_LIST_ITEM = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+")
+
+
+def _drop_label_only_lines(text: str) -> str:
+    """Remove lines that are only a label the model invented ("Possible link:", "NOT A CONFIRMED
+    CAUSE:") with nothing after them. A label followed by a list ("Next steps:" + bullets) stays."""
+    lines = text.split("\n")
+    out: list[str] = []
+    for i, line in enumerate(lines):
+        m = _LABEL_ONLY.match(line)
+        if m and len(m.group(1).split()) <= 5 and not _CITE.search(line):
+            nxt = next((ln for ln in lines[i + 1:] if ln.strip()), "")
+            if not _LIST_ITEM.match(nxt):
+                continue
+        out.append(line)
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
+
+
 def _alert_phrases(body: str) -> list[str]:
     """Distinctive phrases of an alert (its possible factors and what-changed text, 12+ chars)."""
     try:
@@ -253,6 +272,7 @@ def parse_answer(text: str, prompt: Prompt, *, arabic: bool = False,
         missing = [i for i in items if i and i.lower() not in _NONE]
         text = (text[: m.start()] + text[m.end():]).strip()
 
+    text = _drop_label_only_lines(text)
     text = _cite_echoed_facts(text, prompt)
     text = _cite_title_headings(text, prompt)
     text = _enforce_facts(text, prompt, arabic=arabic)

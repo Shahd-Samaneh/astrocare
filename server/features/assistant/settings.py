@@ -15,12 +15,12 @@ DEFAULT_CHAT_MODEL = "llama3.2:3b"
 # Pending proposal A5: these mirror the proposed thresholds.yaml entries exactly.
 _PENDING_DEFAULTS: dict[str, Any] = {
     "assistant_first_token_timeout_sec": 30,
-    "assistant_max_answer_sec": 90,
+    "assistant_max_answer_sec": 120,
     "assistant_top_k": 3,
     "assistant_chunk_words": 300,
     "assistant_chunk_overlap_words": 40,
     "assistant_max_answer_tokens": 200,
-    "assistant_max_summary_tokens": 250,
+    "assistant_max_summary_tokens": 180,
     "assistant_citation_min_similarity": 0.775,  # calibrated 2026-11-14, see proposal A5
     "assistant_num_ctx": 4096,
 }
