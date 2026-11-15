@@ -13,6 +13,8 @@ Checks, in order:
   6. a general question is answered by the local model ("llm" mode, not the template)
 
 It never reseeds the database: run `npm run reseed` first so the demo data is fresh.
+For the demo data itself (day 142, R-FAT-01, stale/missing vitals, outbox, permissions, media),
+run scripts/demo_state.py as well.
 Exit code 0 when every check passed, 1 otherwise.
 """
 from __future__ import annotations

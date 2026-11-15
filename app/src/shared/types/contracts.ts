@@ -130,11 +130,17 @@ export interface Resource {
   contraindicatedAllergies: string[];
 }
 
+export interface NextStepAction {
+  label: string;
+  route: string; // in-app route, e.g. "/attention?retest=al-123" ("{alertId}" = this alert's id)
+}
+
 export interface NextStep {
   text: string;
   resourceId?: string | null;
   availability?: Availability | null;
   lockedForCMO: boolean;
+  action?: NextStepAction | null; // optional button; never shown for a CMO-locked step
 }
 
 export interface Alert {

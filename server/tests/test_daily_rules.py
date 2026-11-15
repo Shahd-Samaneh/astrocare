@@ -112,11 +112,8 @@ def test_sources_endpoint_lists_the_seven_ids(c):
     ]
 
 
-@pytest.mark.xfail(reason="Simulator still seeds a check-in today; change requested (docs/proposals/daily-contracts.md §4)",
-                   strict=False)
-def test_unmodified_seed_has_no_checkin_today():
-    with daily_client(remove_today_checkin=False) as c:
-        assert "Today's check-in" in open_alert(c, FAT)["missing"]
+def test_unmodified_seed_has_no_checkin_today(c):
+    assert "Today's check-in" in open_alert(c, FAT)["missing"]
 
 
 def test_retest_returns_before_vs_after(c):

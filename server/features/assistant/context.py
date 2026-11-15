@@ -157,7 +157,7 @@ def build_context(perms: dict | None = None) -> dict[str, Any]:
         nights = _within_days(raw.get("sleep") or [], "end")
         if nights:
             durs = [n["durationMin"] for n in nights]
-            short_h = threshold("sleep_short_hours")  # config/thresholds.yaml (needs its source filled in)
+            short_h = threshold("sleep_short_hours")  # config/thresholds.yaml (trial value, team decision)
             ctx["sleep7d"] = {
                 "nights": len(nights),
                 "durationsMin": durs,

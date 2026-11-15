@@ -125,11 +125,14 @@ def reference_meta(ref_dir: Path | None = None) -> dict[str, tuple[str, str | No
     return out
 
 
+ALERT_ID_TOKEN = "{alertId}"  # in NextStep.action.route: this alert's id
+
+
 def step_link(step: dict) -> str | None:
-    """In-app link for a next step, shown as a button. The NextStep contract (contracts.ts /
-    core/models.py) only has text, resourceId, availability and lockedForCMO: no link field yet
-    (proposal A13), so every step is plain text for now. Once the field exists, return it here."""
-    return None
+    """In-app link for a next step, shown as a button: NextStep.action.route (Daily proposal §2,
+    chosen over A13's `link`)."""
+    action = step.get("action")
+    return action.get("route") if isinstance(action, dict) else None
 
 
 def answer_steps(alert: dict | None, *, arabic: bool) -> list[AnswerStep]:
@@ -147,7 +150,10 @@ def answer_steps(alert: dict | None, *, arabic: bool) -> list[AnswerStep]:
         if not key or key in seen:
             continue
         seen.add(key)
-        out.append(AnswerStep(text=text, link=None if locked else _in_app(step_link(s)), locked_for_cmo=locked))
+        link = None if locked else _in_app(step_link(s))
+        if link and alert.get("id"):
+            link = link.replace(ALERT_ID_TOKEN, str(alert["id"]))
+        out.append(AnswerStep(text=text, link=link, locked_for_cmo=locked))
     return out
 
 

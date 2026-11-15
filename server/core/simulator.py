@@ -9,6 +9,8 @@ Baked-in demo scenario (mission day 142 is "today", the last simulated day):
   * the last two attention tests have a median ~20 % slower than baseline
   * skin temperature is stale: last value 6 h ago, its sensor is "disconnected"
   * no blood pressure reading today (missing)
+  * no check-in today (R-FAT-01 lists it as missing)
+  * the outbox is empty (earlier reports are already sent)
 """
 from __future__ import annotations
 
@@ -172,7 +174,7 @@ def generate(now: datetime) -> dict[str, list[dict[str, Any]]]:
         })
 
     # ---- check-ins -------------------------------------------------------------
-    for d in range(first_day, today + 1):
+    for d in range(first_day, today):  # no check-in today: the demo shows it as missing
         skipped = d == first_day + 6
         late = d >= today - 1
         out["checkins"].append({
@@ -219,14 +221,15 @@ def generate(now: datetime) -> dict[str, list[dict[str, Any]]]:
             "audio_mode": ["nature", "music", "nature"][k], "duration_min": [10, 15, 10][k],
             "stress_before": [3, 3, 4][k], "stress_after": [2, 2, 3][k],
         })
+    # past reports are already sent, so the outbox starts empty after a reseed
     out["reports"] = [
         {"id": "rep-135", "created_ts": iso(day_start(135) + timedelta(hours=18)), "status": "sent",
          "sections": [{"id": "s1", "title": "Weekly health summary", "body": "All metrics within personal baseline."}],
          "file_path": None},
-        {"id": "rep-141", "created_ts": iso(day_start(141) + timedelta(hours=18)), "status": "queued",
+        {"id": "rep-141", "created_ts": iso(day_start(141) + timedelta(hours=18)), "status": "sent",
          "sections": [{"id": "s1", "title": "Weekly health summary", "body": "Short sleep on night 141."}],
          "file_path": None},
-        {"id": "rep-142", "created_ts": iso(day_start(142) + timedelta(hours=6, minutes=50)), "status": "queued",
+        {"id": "rep-142", "created_ts": iso(day_start(142) + timedelta(hours=6, minutes=50)), "status": "sent",
          "sections": [{"id": "s1", "title": "Sleep and attention note", "body": "Two short nights; attention test slower than baseline."}],
          "file_path": None},
     ]
