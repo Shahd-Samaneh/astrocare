@@ -92,7 +92,7 @@ def test_demo_state_is_green_right_after_a_reseed_and_flags_a_rehearsal_leftover
     from server.core import live_feed
     results = ds.run_state_checks(log=lambda _line: None)
     assert [name for name, ok, _ in results if not ok] == ["Live feed running"]  # no server in tests
-    assert len(results) == 9
+    assert len(results) == 10  # incl. "Cabin readings fresh"
 
     live_feed.tick()  # what the running server does every minute
     results = ds.run_state_checks(log=lambda _line: None)

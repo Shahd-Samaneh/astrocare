@@ -4,6 +4,7 @@ Working stubs that read the DB. Extend freely inside this folder.
 """
 from __future__ import annotations
 
+import re
 import statistics
 from datetime import timedelta
 from typing import Literal, Optional
@@ -12,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import Field
 
 from server.core import db
-from server.core.config import iso, parse_ts, threshold, utcnow
+from server.core.config import has_real_source, iso, parse_ts, threshold, thresholds, utcnow
 from server.core.models import (
     CABIN_METRICS, METRICS, Alert, AlertStatus, ApiModel, CabinMetric, CabinReading, Metric, Profile,
     Quality, Reading, Resource, Sensor,
@@ -116,11 +117,35 @@ def list_cabin(metric: Optional[CabinMetric] = None, hours: float = Query(24, gt
 CabinStatus = Literal["usual", "above_usual", "below_usual", "missing"]
 
 
+class CabinLimit(ApiModel):
+    """A sourced limit from config/thresholds.yaml, shown under the cabin value.
+
+    min/max are the threshold values as written (None = no bound on that side);
+    window_minutes is set when the limit applies to an average (co2).
+    source is the full yaml text; source_label a short form for the screen.
+    name labels the range when it has one ("Comfort zone" = [V2 6013]).
+    health_* is the wider [V2 6012] crew-health limit, display context only (no rule uses it).
+    """
+
+    min: Optional[float] = None
+    max: Optional[float] = None
+    unit: str
+    window_minutes: Optional[int] = None
+    source: str
+    source_label: str
+    name: Optional[str] = None
+    health_min: Optional[float] = None
+    health_max: Optional[float] = None
+    health_source_label: Optional[str] = None
+
+
 class CabinLatest(ApiModel):
     """Latest cabin reading plus whether it sits inside the usual range.
 
     value/unit/ts describe the latest reading; status is the comparison result.
     For co2 the status is judged on the 1-hour average, not this single value.
+    stale uses the vitals rule: no reading for longer than stale_minutes.
+    limit is only present when thresholds.yaml has a numeric limit with a real source.
     """
 
     metric: CabinMetric
@@ -128,6 +153,63 @@ class CabinLatest(ApiModel):
     unit: str
     ts: Optional[str] = None
     status: CabinStatus
+    age_minutes: Optional[int] = None
+    stale: bool = False
+    limit: Optional[CabinLimit] = None
+
+
+# Which threshold keys form each metric's displayed limit. Noise has none: its yaml entry is a
+# team-decision SD multiplier on a rolling baseline, not a sourced number.
+_CABIN_LIMIT_KEYS: dict[str, tuple[Optional[str], Optional[str], Optional[str]]] = {
+    # metric: (min key, max key, averaging-window key)
+    "co2": (None, "co2_max", "co2_avg_window_minutes"),
+    "cabin_temp": ("cabin_temp_min", "cabin_temp_max", None),
+    "humidity": ("humidity_min", "humidity_max", None),
+}
+_CABIN_LIMIT_NAMES = {"cabin_temp": "Comfort zone", "humidity": "Comfort zone"}  # [V2 6013]
+# [V2 6012] crew-health limits, shown next to the comfort zone (display only).
+_CABIN_HEALTH_KEYS = {
+    "cabin_temp": ("cabin_temp_health_min", "cabin_temp_health_max"),
+    "humidity": ("humidity_health_min", "humidity_health_max"),
+}
+
+def _source_label(source: str) -> str:
+    """'NASA-STD-3001 Vol. 2 Rev D [V2 6013] …, via …' -> 'NASA-STD-3001 [V2 6013]'."""
+    standard = source.split(" Vol.")[0].split(" [")[0].split(",")[0].strip()
+    req = re.search(r"\[V\d+ \d+\]", source)
+    return f"{standard} {req.group(0)}" if req else standard
+
+
+def _sourced_pair(all_t: dict, lo_key: str, hi_key: str) -> bool:
+    return all(k in all_t and all_t[k].value is not None and has_real_source(all_t[k]) for k in (lo_key, hi_key))
+
+
+def _cabin_limit(metric: str) -> Optional[CabinLimit]:
+    keys = _CABIN_LIMIT_KEYS.get(metric)
+    if not keys:
+        return None
+    all_t = thresholds()
+    lo_key, hi_key, window_key = keys
+    bounds = [all_t.get(k) if k else None for k in (lo_key, hi_key)]
+    if any(k and (all_t.get(k) is None or all_t[k].value is None or not has_real_source(all_t[k]))
+           for k in (lo_key, hi_key)):
+        return None  # a bound without a number or a real source: show no limit at all
+    first = next(b for b in bounds if b is not None)
+    window = all_t.get(window_key) if window_key else None
+    health = _CABIN_HEALTH_KEYS.get(metric)
+    health_t = (all_t[health[0]], all_t[health[1]]) if health and _sourced_pair(all_t, *health) else None
+    return CabinLimit(
+        name=_CABIN_LIMIT_NAMES.get(metric),
+        health_min=float(health_t[0].value) if health_t else None,
+        health_max=float(health_t[1].value) if health_t else None,
+        health_source_label=_source_label(health_t[0].source) if health_t else None,
+        min=float(bounds[0].value) if bounds[0] is not None else None,
+        max=float(bounds[1].value) if bounds[1] is not None else None,
+        unit=first.unit,
+        window_minutes=int(window.value) if window is not None and window.value is not None else None,
+        source=first.source,
+        source_label=_source_label(first.source),
+    )
 
 
 def _range_status(value: float, low: float, high: float) -> CabinStatus:
@@ -180,16 +262,22 @@ def cabin_latest() -> list[CabinLatest]:
     with their usual ranges; noise with its last-7-days mean ± 2 SD baseline.
     """
     now = utcnow()
+    stale_min = float(threshold("stale_minutes"))
     out: list[CabinLatest] = []
     for metric in CABIN_METRICS:
+        limit = _cabin_limit(metric)
         rows = db.query("cabin_readings", "metric = ?", (metric,), order_by="ts DESC", limit=1)
         if not rows:
-            out.append(CabinLatest(metric=metric, value=None, unit=UNITS[metric], ts=None, status="missing"))
+            out.append(CabinLatest(metric=metric, value=None, unit=UNITS[metric], ts=None, status="missing",
+                                   limit=limit))
             continue
         latest = CabinReading.model_validate(rows[0])
+        age = int((now - parse_ts(latest.ts)).total_seconds() // 60)
         out.append(CabinLatest(
             metric=metric, value=latest.value, unit=latest.unit, ts=latest.ts,
             status=_cabin_status(metric, latest, now),
+            age_minutes=age, stale=age > stale_min,  # same rule as GET /readings/latest
+            limit=limit,
         ))
     return out
 

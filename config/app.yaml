@@ -35,11 +35,16 @@ simulator:
   # Demo live feed (server/core/live_feed.py): while the server runs, add a simulated HR, SpO2 and
   # respiration reading every `every_minutes`, inside baseline mean ± `band_sd` SD (quality good),
   # so these cards don't go stale on stage. Never skin temperature or blood pressure.
+  # Cabin (CO2, temperature, noise, humidity): one reading every `cabin_every_minutes`, close to the
+  # latest seeded value (normal noise of `cabin_jitter_sd` x that metric's seeded SD), clamped inside
+  # the thresholds.yaml limits so R-CAB-01 can't fire from the feed.
   # Always off under pytest (and with ASTROCARE_NO_LIVE_FEED=1).
   live_feed:
     enabled: true
     every_minutes: 5
     band_sd: 0.5
+    cabin_every_minutes: 15
+    cabin_jitter_sd: 0.25
 
 ollama:
   url: "http://localhost:11434"

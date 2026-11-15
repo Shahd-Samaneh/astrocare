@@ -22,6 +22,7 @@ from server.features.daily.attention_stats import DailyNextStep, NextStepAction
 from server.features.daily.thresholds import daily_threshold
 
 from .base import AlertDraft, Rule, RuleContext
+from .cabin_factors import cabin_factors
 
 NIGHTS_CHECKED = 3  # "of the last 3 nights" (contract §3)
 
@@ -66,6 +67,8 @@ class ShortSleepRule(Rule):
         if not res.fires:
             return None
         n, total = len(res.short), len(res.nights)
+        # Cabin conditions over the same nights (sourced thresholds only; rules/cabin_factors.py).
+        cab_factors, cab_used = cabin_factors(ctx, parse_ts(res.nights[0].start)) if res.nights else ([], [])
         missing = []
         if res.nights and res.nights[-1].self_quality is None:
             missing.append("Sleep self-rating for last night")
@@ -76,12 +79,13 @@ class ShortSleepRule(Rule):
                 f"Under {res.limit_h:g} h on {n} of the last {total} nights. "
                 f"Last {total} nights: {fmt_nights(res.nights)}."
             ),
-            data_used=[s.id for s in res.nights],
+            data_used=[s.id for s in res.nights] + cab_used,
             missing=missing,
             possible_factors=[
                 "Schedule shifts or a heavy workload (not confirmed)",
                 "Noise, light or temperature in the sleep station (not confirmed)",
                 "Stress or worry (not confirmed)",
+                *cab_factors,
             ],
             next_steps=[
                 DailyNextStep(text="Rate last night's sleep in the Daily log",

@@ -10,7 +10,9 @@ cabin card and this alert agree whenever readings exist in the window. The logic
 is replicated here rather than imported from the router.
 
 It never names a cause: it lists *possible factors* and gives operational steps
-only (no medicine or treatment advice).
+only (no medicine or treatment advice). Next steps, in order: confirm with a portable
+CO₂ reading, inform the crew member responsible for life support, move to a better-
+ventilated module, log symptoms in today's check-in, add to report.
 
 Source: NASA-STD-3001 Vol. 2 [V2 6004] / NASA OCHMO Technical Brief TB-004.
 
@@ -20,7 +22,7 @@ from __future__ import annotations
 
 import statistics
 
-from server.core.models import NextStep
+from server.core.models import NextStep, NextStepAction
 
 from .base import AlertDraft, Rule, RuleContext
 
@@ -66,10 +68,14 @@ class CabinCo2Rule(Rule):
                 "Reduced air circulation",
                 "CO₂ removal system performance",
             ],
-            next_steps=[
-                NextStep(text="Check air circulation and fans near the crew area; follow the vehicle's CO₂ procedure"),
-                NextStep(text="Recheck the CO₂ average after the next window"),
-                NextStep(text="If crew report symptoms such as headache, inform the CMO", locked_for_cmo=True),
+            next_steps=[  # operational only, in this order; never medication
+                NextStep(text="Confirm with a portable CO₂ reading"),
+                NextStep(text="Inform the crew member responsible for life support"),
+                NextStep(text="Move to a better-ventilated module"),
+                NextStep(text="Log any symptoms (such as headache) in today's check-in",
+                         action=NextStepAction(label="Open check-in", route="/daily#checkin")),
+                NextStep(text="Add this alert to the report",
+                         action=NextStepAction(label="Open reports", route="/reports")),
             ],
             dedupe_key="cab-co2-high",
         )

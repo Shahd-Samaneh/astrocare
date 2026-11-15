@@ -214,12 +214,35 @@ export interface LatestReading {
   sensorStatus: SensorStatus | null;
 }
 
+/** A sourced limit from config/thresholds.yaml (null bound = no limit on that side). */
+export interface CabinLimit {
+  min: number | null;
+  max: number | null;
+  unit: string;
+  /** Set when the limit applies to an average (co2: 1-hour average). */
+  windowMinutes: number | null;
+  source: string;
+  /** Short form for the screen, e.g. "NASA-STD-3001 [V2 6013]". */
+  sourceLabel: string;
+  /** Name of the range when it has one, e.g. "Comfort zone" ([V2 6013]). */
+  name: string | null;
+  /** Wider [V2 6012] crew-health limit: display context only, no rule uses it. */
+  healthMin: number | null;
+  healthMax: number | null;
+  healthSourceLabel: string | null;
+}
+
 export interface CabinLatest {
   metric: CabinMetric;
   value: number | null;
   unit: string;
   ts: string | null;
   status: 'usual' | 'above_usual' | 'below_usual' | 'missing';
+  ageMinutes: number | null;
+  /** Same rule as vitals: no reading for longer than stale_minutes. */
+  stale: boolean;
+  /** Only present when thresholds.yaml has a numeric limit with a real source. */
+  limit: CabinLimit | null;
 }
 
 export interface BodySystem {

@@ -18,19 +18,22 @@ import {
 } from 'lucide-react';
 import { api, useApi } from '../../../shared/api/client';
 import { useAppStatus } from '../../../shared/api/AppStatusContext';
-import { AlertBanner, Card, VitalCard } from '../../../shared/components';
+import { AlertBanner, Badge, Card, VitalCard } from '../../../shared/components';
 import { SleepSummaryCard, TodayPlanCard } from '../../daily';
 import type {
   Alert,
   CabinMetric,
   CabinLatest,
+  CabinLimit,
   BodySystem,
   LatestReading,
   Metric,
   Profile,
   Reading,
+  Sensor,
+  SensorStatus,
 } from '../../../shared/types/contracts';
-import { METRIC_LABELS } from '../../../shared/utils/format';
+import { METRIC_LABELS, relativeTime } from '../../../shared/utils/format';
 import styles from './Today.module.css';
 
 const VITALS: Metric[] = ['heart_rate', 'spo2', 'skin_temp', 'bp_sys'];
@@ -53,6 +56,25 @@ const BODY_SYSTEM_TILES = [
   { id: 'thermoregulation', label: 'Thermoregulation', Icon: Thermometer },
 ] as const;
 
+/** Figure markers → sensor ids from GET /sensors, matched to each sensor's `location`.
+ * The blood pressure cuff is stored in the medical kit (not worn), so it has no marker. */
+const SENSOR_PINS = [
+  { n: 1, sensorId: 's-chest', fallbackName: 'Chest strap', pinClass: 'pinOne' },             // Torso
+  { n: 2, sensorId: 's-skin', fallbackName: 'Skin temperature patch', pinClass: 'pinTwo' },   // Upper arm
+  { n: 3, sensorId: 's-wrist', fallbackName: 'Wrist oximeter', pinClass: 'pinThree' },        // Left wrist
+] as const;
+
+const SENSOR_STATUS_LABELS: Record<SensorStatus, string> = {
+  connected: 'connected',
+  low_battery: 'low battery',
+  disconnected: 'disconnected',
+};
+const SENSOR_STATUS_CLASS: Record<SensorStatus, string> = {
+  connected: styles.pinConnected,
+  low_battery: styles.pinLowBattery,
+  disconnected: styles.pinDisconnected,
+};
+
 const BODY_STATUS_LABELS: Record<BodySystem['status'], string> = {
   stable: 'Stable',
   review: 'Review',
@@ -73,6 +95,27 @@ function greeting(): string {
 
 function formatMetric(value: number, unit: string): string {
   return `${Number(value.toFixed(1))} ${unit}`.trim();
+}
+
+function unitSuffix(unit: string): string {
+  return unit === '%' ? '%' : ` ${unit}`;
+}
+
+/** "Limit ≤ 3 mmHg (1-h average)" / "Comfort zone 20–25 °C". Numbers come from GET /cabin/latest only. */
+function formatLimit({ min, max, unit, windowMinutes, name }: CabinLimit): string {
+  const u = unitSuffix(unit);
+  const avg = windowMinutes ? ` (${windowMinutes % 60 === 0 ? `${windowMinutes / 60}-h` : `${windowMinutes}-min`} average)` : '';
+  if (min != null && max != null) return `${name ?? 'Range'} ${min}–${max}${u}${avg}`;
+  if (max != null) return `Limit ≤ ${max}${u}${avg}`;
+  return `Limit ≥ ${min}${u}${avg}`;
+}
+
+/** Tooltip: full source, plus the wider [V2 6012] crew-health limit when the API gives one. */
+function limitTooltip(limit: CabinLimit): string {
+  const health = limit.healthMin != null && limit.healthMax != null
+    ? `\nCrew-health limit: ${limit.healthMin}–${limit.healthMax}${unitSuffix(limit.unit)} · ${limit.healthSourceLabel ?? ''}`.trimEnd()
+    : '';
+  return `Source: ${limit.source}${health}`;
 }
 
 /** Small plot built from actual readings; no sample values are inserted. */
@@ -106,6 +149,7 @@ export default function Today() {
   const { data: bodySystems, error: systemsError, loading: systemsLoading } =
     useApi<BodySystem[]>('/body-systems', { refreshMs: 30_000 });
   const { data: profile } = useApi<Profile>('/profile');
+  const { data: sensors, error: sensorsError } = useApi<Sensor[]>('/sensors', { refreshMs: 30_000 });
 
   const [manualOpen, setManualOpen] = useState(false);
   const [systolic, setSystolic] = useState('');
@@ -116,6 +160,11 @@ export default function Today() {
 
   const byMetric = new Map<Metric, LatestReading>((latest ?? []).map((x) => [x.metric, x]));
   const dia = byMetric.get('bp_dia')?.reading;
+  const pins = SENSOR_PINS.map((pin) => {
+    // Never show a stale colour when the sensor list fails to load.
+    const sensor = sensorsError ? undefined : sensors?.find((x) => x.id === pin.sensorId);
+    return { ...pin, name: sensor?.name ?? pin.fallbackName, status: sensor?.status };
+  });
   const mostRelevantAlert =
     alerts?.find((a) => a.ruleId === 'R-FAT-01') ??
     alerts?.find((a) => a.level === 'urgent') ??
@@ -174,19 +223,38 @@ export default function Today() {
       )}
 
       <section className={styles.overview} aria-labelledby="systems-title">
-        <div className={styles.crewIllustration} aria-hidden="true">
-          <div className={styles.helmet}><span /></div>
-          <div className={styles.suit}><span>+</span></div>
-          <div className={styles.leftArm} />
-          <div className={styles.rightArm} />
-          <div className={styles.leftLeg} />
-          <div className={styles.rightLeg} />
-          <span className={`${styles.pin} ${styles.pinOne}`}>1</span>
-          <span className={`${styles.pin} ${styles.pinTwo}`}>2</span>
-          <span className={`${styles.pin} ${styles.pinThree}`}>3</span>
-          <span className={`${styles.pin} ${styles.pinFour}`}>4</span>
-          <p>Illustrative sensor layout</p>
-        </div>
+        <figure className={styles.sensorFigure}>
+          <div className={styles.crewIllustration}>
+            <div className={styles.helmet} aria-hidden="true"><span /></div>
+            <div className={styles.suit} aria-hidden="true"><span>+</span></div>
+            <div className={styles.leftArm} aria-hidden="true" />
+            <div className={styles.rightArm} aria-hidden="true" />
+            <div className={styles.leftLeg} aria-hidden="true" />
+            <div className={styles.rightLeg} aria-hidden="true" />
+            {pins.map(({ n, name, status, pinClass }) => (
+              <span
+                key={n}
+                role="img"
+                aria-label={`Sensor ${n}: ${name}, ${status ? SENSOR_STATUS_LABELS[status] : 'status unavailable'}`}
+                className={`${styles.pin} ${styles[pinClass]} ${status ? SENSOR_STATUS_CLASS[status] : ''}`}
+              >
+                <span aria-hidden="true">{n}</span>
+              </span>
+            ))}
+          </div>
+          <figcaption className={styles.sensorCaption}>
+            <p>Illustrative sensor layout</p>
+            <ol className={styles.sensorLegend}>
+              {pins.map(({ n, name, status }) => (
+                <li key={n}>
+                  <span className={styles.legendNumber} aria-hidden="true">{n}</span>
+                  {name}
+                  <span className={styles.legendStatus}>{status ? SENSOR_STATUS_LABELS[status] : 'status unavailable'}</span>
+                </li>
+              ))}
+            </ol>
+          </figcaption>
+        </figure>
         <div className={styles.overviewContent}>
           <p className={styles.kicker}>+ SPACE MEDICINE OVERVIEW</p>
           <h2 id="systems-title">Body systems affected by spaceflight</h2>
@@ -289,12 +357,24 @@ export default function Today() {
                 : entry?.status === 'above_usual' || entry?.status === 'below_usual' ? styles.cabinOutOfRange
                   : styles.cabinMissing;
               return (
-                <div className={styles.cabinTile} key={metric}>
-                  <span className={styles.cabinLabel}>{label}</span>
+                <div className={`${styles.cabinTile} ${entry?.stale ? styles.cabinStale : ''}`} key={metric}>
+                  <span className={styles.cabinLabel}>
+                    {label}
+                    {entry?.stale && <Badge variant="stale" />}
+                  </span>
                   <strong>{entry?.value != null ? formatMetric(entry.value, entry.unit) : '—'}</strong>
+                  {entry?.limit && (
+                    <span className={styles.cabinLimit} title={limitTooltip(entry.limit)}>
+                      {formatLimit(entry.limit)} · {entry.limit.sourceLabel}
+                    </span>
+                  )}
                   <span className={`${styles.cabinStatus} ${statusClass}`}>{statusText}</span>
                   <span className={styles.cabinMeta}>
-                    {entry?.ts ? `Recorded ${new Date(entry.ts).toLocaleString()}` : 'No recent reading timestamp'}
+                    {entry?.ts ? (
+                      <>
+                        Recorded {new Date(entry.ts).toLocaleString()} · <time dateTime={entry.ts}>{relativeTime(entry.ts)}</time>
+                      </>
+                    ) : 'No recent reading timestamp'}
                   </span>
                 </div>
               );

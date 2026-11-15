@@ -25,14 +25,15 @@ def test_fat_01_fires_on_seeded_data(c):
     assert {"sleep-141", "sleep-142", "pvt-141", "pvt-142"} <= set(a["dataUsed"])
     assert "Today's check-in" in a["missing"]
     assert "ms" in a["whatChanged"] and "%" in a["whatChanged"] and " h " in a["whatChanged"]
-    assert all("not confirmed" in f for f in a["possibleFactors"])
+    assert all("not confirmed" in f or "not a confirmed cause" in f for f in a["possibleFactors"])
     assert "dose" not in json.dumps(a).lower() and "medic" not in json.dumps(a).lower()
 
 
 def test_slp_01_fires_on_seeded_data(c):
     a = open_alert(c, "R-SLP-01")
     assert a["level"] == "info"
-    assert set(a["dataUsed"]) == {"sleep-140", "sleep-141", "sleep-142"}
+    assert {"sleep-140", "sleep-141", "sleep-142"} <= set(a["dataUsed"])
+    assert all(x.startswith("sleep-") or x.startswith("Cabin ") for x in a["dataUsed"])
 
 
 def test_next_step_actions_carry_the_alert_id(c):
