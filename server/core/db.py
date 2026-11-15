@@ -125,10 +125,25 @@ def init_db() -> None:
             conn.execute(stmt)
 
 
+# Tables created by feature code (CREATE TABLE IF NOT EXISTS), not in TABLES. A reset empties
+# them so a reseed gives a clean demo state (empty outbox items, default assistant permissions,
+# no open simulated comm window). `assistant_chunks` (the reference index) is kept on purpose:
+# rebuilding it needs Ollama.
+FEATURE_TABLES_CLEARED_ON_RESET = (
+    "report_items", "comms_windows",
+    "assistant_permissions", "assistant_log",
+    "daily_test_context", "daily_test_meta",
+)
+
+
 def reset_db() -> None:
     with connect() as conn:
         for table in TABLES:
             conn.execute(f'DROP TABLE IF EXISTS "{table}"')
+        existing = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        for table in FEATURE_TABLES_CLEARED_ON_RESET:
+            if table in existing:
+                conn.execute(f'DELETE FROM "{table}"')  # keep the schema, drop the rows
     init_db()
 
 

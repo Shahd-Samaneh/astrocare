@@ -149,7 +149,7 @@ average/shortest/last night, nights under `sleep_short_hours`, latest attention 
 up to date / stale / missing, exercise logged) are computed in code (`assistant/facts.py`) and shown to the model as
 `FIXED FACT:` lines it must not change. A sentence about the user's own data that contradicts one of them (e.g. "no
 lapses" when lapses > 0, or "stale" for fresh data) is replaced by the fact line, with its citation.
-`sleep_short_hours` is read from `config/thresholds.yaml`, where its `source` is still `TODO`.
+`sleep_short_hours` is read from `config/thresholds.yaml` (trial value, team decision; the NASA sleep-risk page gives no hour cut-off).
 
 ### A6. Tables (created by my own code, not `core/db.TABLES`)
 
@@ -226,6 +226,10 @@ sources their text cites, renumbered 1..n, like model answers already did. Alert
 (title and url from its header); ids with no such file are ignored.
 
 ### A13. `NextStep.link` (contracts.ts `NextStep` + `core/models.py`), for Haya and the Daily pair
+
+> **Status: done, using the Daily pair's `NextStep.action {label, route}` (Daily §2) instead of a separate
+> `link` field** (one name for both). `step_link()` in `assistant/fallback.py` returns `action.route`;
+> `{alertId}` is filled in; same-app paths only; never on a CMO-locked step.
 
 The assistant can show a next step as a button that navigates in the app (`/daily#checkin`,
 `/attention?retest=<alertId>`), but `NextStep` today is only `{ text, resourceId?, availability?, lockedForCMO }`,

@@ -9,8 +9,6 @@ import {
   ArrowRight,
   Bone,
   Brain,
-  CheckCircle2,
-  Circle,
   Eye,
   HeartPulse,
   Moon,
@@ -21,29 +19,19 @@ import {
 import { api, useApi } from '../../../shared/api/client';
 import { useAppStatus } from '../../../shared/api/AppStatusContext';
 import { AlertBanner, Card, VitalCard } from '../../../shared/components';
+import { SleepSummaryCard, TodayPlanCard } from '../../daily';
 import type {
   Alert,
   CabinMetric,
   CabinLatest,
   BodySystem,
-  ExercisePlan,
   LatestReading,
   Metric,
   Profile,
   Reading,
-  SleepSession,
 } from '../../../shared/types/contracts';
 import { METRIC_LABELS } from '../../../shared/utils/format';
 import styles from './Today.module.css';
-
-type TodayPlan = {
-  missionDay: number;
-  exercise: ExercisePlan | null;
-  exerciseLogged: boolean;
-  attentionCheckDone: boolean;
-  checkInDone: boolean;
-  lastSleep: SleepSession | null;
-};
 
 const VITALS: Metric[] = ['heart_rate', 'spo2', 'skin_temp', 'bp_sys'];
 const CABIN_METRICS: { metric: CabinMetric; label: string }[] = [
@@ -78,12 +66,6 @@ const CABIN_STATUS_LABELS: Record<CabinLatest['status'], string> = {
 };
 
 
-function duration(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = Math.round(minutes % 60);
-  return h > 0 ? `${h} h ${m} m` : `${m} m`;
-}
-
 function greeting(): string {
   const hour = new Date().getHours();
   return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -112,17 +94,6 @@ function MiniTrend({ metric, readings }: { metric: Metric; readings: Reading[] }
   );
 }
 
-function StatusLine({ label, done, to }: { label: string; done: boolean; to: string }) {
-  return (
-    <Link className={styles.task} to={to}>
-      {done ? <CheckCircle2 size={20} aria-label="Done" /> : <Circle size={20} aria-label="Not completed" />}
-      <span>{label}</span>
-      <span className={styles.taskStatus}>{done ? 'Done' : 'Open'}</span>
-      <ArrowRight size={15} aria-hidden />
-    </Link>
-  );
-}
-
 export default function Today() {
   const { status } = useAppStatus();
   const { data: alerts, error: alertError, loading: alertsLoading, reload: reloadAlerts } =
@@ -134,8 +105,6 @@ export default function Today() {
     useApi<CabinLatest[]>('/cabin/latest', { refreshMs: 30_000 });
   const { data: bodySystems, error: systemsError, loading: systemsLoading } =
     useApi<BodySystem[]>('/body-systems', { refreshMs: 30_000 });
-  const { data: todayPlan, error: planError, loading: planLoading } = useApi<TodayPlan>('/today/plan');
-  const { data: sleep, loading: sleepLoading } = useApi<SleepSession[]>('/sleep?nights=7');
   const { data: profile } = useApi<Profile>('/profile');
 
   const [manualOpen, setManualOpen] = useState(false);
@@ -147,9 +116,6 @@ export default function Today() {
 
   const byMetric = new Map<Metric, LatestReading>((latest ?? []).map((x) => [x.metric, x]));
   const dia = byMetric.get('bp_dia')?.reading;
-  const lastSleep = todayPlan?.lastSleep ?? (sleep && sleep.length > 0 ? sleep[sleep.length - 1] : null);
-  const sleepBaselineHours = profile?.baseline.sleep_hours?.mean;
-  const maxSleepMinutes = Math.max(1, ...(sleep?.map((s) => s.durationMin) ?? []));
   const mostRelevantAlert =
     alerts?.find((a) => a.ruleId === 'R-FAT-01') ??
     alerts?.find((a) => a.level === 'urgent') ??
@@ -338,45 +304,10 @@ export default function Today() {
       </section>
 
       <div className={styles.lowerGrid}>
-        <Card title="Today's plan" subtitle="Based on local daily activity records">
-          {planError && <p className={styles.error} role="alert">Could not load today's plan: {planError.message}</p>}
-          {planLoading && !todayPlan && <p className={styles.muted}>Loading today's plan…</p>}
-          {todayPlan && (
-            <div className={styles.taskList}>
-              <StatusLine label="Daily check-in" done={todayPlan.checkInDone} to="/daily" />
-              <StatusLine label="Attention check" done={todayPlan.attentionCheckDone} to="/attention" />
-              {todayPlan.exercise ? (
-                <StatusLine label={`${todayPlan.exercise.type} · ${duration(todayPlan.exercise.durationMin)}`} done={todayPlan.exerciseLogged} to="/daily" />
-              ) : (
-                <p className={styles.muted}>No exercise scheduled for this mission day.</p>
-              )}
-            </div>
-          )}
-        </Card>
+        {/* Daily pair's cards: fetch /api/today/plan and /api/sleep/summary themselves. */}
+        <TodayPlanCard />
         <div className={styles.sleepColumn}>
-          <Card title="Last recorded sleep" actions={<Link to="/daily" className={styles.inlineLink}>Details <ArrowRight size={15} aria-hidden /></Link>}>
-            {sleepLoading && !lastSleep && <p className={styles.muted}>Loading sleep history…</p>}
-            {lastSleep ? (
-              <>
-                <div className={styles.sleepValue}>
-                  <strong>{duration(lastSleep.durationMin)}</strong>
-                  {typeof sleepBaselineHours === 'number' && (
-                    <span>Personal baseline: {duration(Math.round(sleepBaselineHours * 60))}</span>
-                  )}
-                </div>
-                {sleep && sleep.length > 0 && (
-                  <div className={styles.sleepBars} role="group" aria-label="Recent sleep durations">
-                    {sleep.slice(-7).map((s) => (
-                      <div className={styles.sleepBarColumn} key={s.id} title={duration(s.durationMin)}>
-                        <span style={{ height: `${Math.max(6, Math.min(100, (s.durationMin / maxSleepMinutes) * 100))}%` }} aria-label={duration(s.durationMin)} />
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <p className={styles.muted}>{lastSleep.awakenings} wake-up(s) · {lastSleep.selfQuality != null ? `Self-rated quality ${lastSleep.selfQuality}/5` : 'Sleep quality not rated'}</p>
-              </>
-            ) : (!sleepLoading && <p className={styles.muted}>No sleep sessions recorded yet.</p>)}
-          </Card>
+          <SleepSummaryCard />
           <Link className={styles.assistantLink} to="/assistant">
             <Activity size={22} aria-hidden />
             <span><strong>Ask about your data</strong><small>Local assistant · on-device sources</small></span>

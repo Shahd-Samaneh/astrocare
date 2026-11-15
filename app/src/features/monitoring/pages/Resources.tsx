@@ -74,7 +74,7 @@ export default function Resources() {
   const [kind, setKind] = useState<KindFilter>('all');
   const [status, setStatus] = useState<StatusFilter>('all');
 
-  const resources = inventory.data ?? [];
+  const resources = useMemo(() => inventory.data ?? [], [inventory.data]);
   const filtered = useMemo(() => resources.filter((resource) => {
     const matchesText = `${resource.name} ${resource.id}`.toLocaleLowerCase().includes(normalized(search));
     const matchesKind = kind === 'all' || resource.kind === kind;

@@ -1,9 +1,8 @@
 """Daily test helpers (owner: Shahd): a fresh, seeded DB per test.
 
 `daily_client()` points ASTROCARE_DB_PATH at a new temp file, seeds the demo
-scenario, optionally removes today's check-in (emulating the simulator change we
-asked Haya for in docs/proposals/daily-contracts.md §4), runs the engine, and
-yields a TestClient. The previous DB path is restored afterwards, so the shared
+scenario (the simulator leaves today's check-in out, so R-FAT-01 lists it as
+missing), runs the engine, and yields a TestClient. The previous DB path is restored afterwards, so the shared
 session `client` fixture is unaffected.
 """
 from __future__ import annotations
@@ -18,11 +17,8 @@ from fastapi.testclient import TestClient
 
 
 @contextmanager
-def daily_client(*, remove_today_checkin: bool = True) -> Iterator[TestClient]:
-    from server.core import db
-    from server.core.config import iso
+def daily_client() -> Iterator[TestClient]:
     from server.core.seed import seed
-    from server.core.status import mission_day_start
     from server.features.daily.engine_hooks import run_daily_engine
     from server.main import app
 
@@ -30,9 +26,6 @@ def daily_client(*, remove_today_checkin: bool = True) -> Iterator[TestClient]:
     os.environ["ASTROCARE_DB_PATH"] = str(Path(tempfile.mkdtemp(prefix="astrocare-daily-")) / "daily.db")
     try:
         seed(force=True)
-        if remove_today_checkin:
-            with db.connect() as conn:
-                conn.execute("DELETE FROM checkins WHERE ts >= ?", (iso(mission_day_start()),))
         with TestClient(app) as c:  # lifespan: already seeded, runs the engine
             run_daily_engine()
             yield c
