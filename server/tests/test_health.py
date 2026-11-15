@@ -13,7 +13,7 @@ def test_status_shape(client):
     assert s["missionDay"] == 142
     assert s["met"].startswith("142:")
     assert s["crewInitials"] == "C2"
-    assert s["outboxCount"] == 2
+    assert s["outboxCount"] == 0  # seeded reports are already sent
     assert s["localMode"] is True
 
 

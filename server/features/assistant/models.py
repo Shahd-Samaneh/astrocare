@@ -26,8 +26,8 @@ class AssistantSource(ApiModel):
 
 
 class AnswerStep(ApiModel):
-    """One next step of the explained alert. `link` is an in-app path ("/daily#checkin"), only
-    when the alert's NextStep carries one (proposal A13: the field does not exist yet)."""
+    """One next step of the explained alert. `link` is an in-app path ("/daily#checkin"), taken
+    from the alert's NextStep.action.route; never set on a CMO-locked step."""
 
     text: str
     link: Optional[str] = None

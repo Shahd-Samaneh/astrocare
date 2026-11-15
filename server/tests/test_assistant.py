@@ -1096,3 +1096,32 @@ def test_demo_check_reports_failures_when_ollama_is_off(client, monkeypatch, moc
         assert re.search(rf"❌ {re.escape(name)}", out), name
     assert re.search(r"✅ Alert question", out)  # answered from the alert: no model needed
     assert "mode 'fallback'" in out
+
+
+def test_next_step_link_comes_from_the_alert_action_route():
+    from server.features.assistant import fallback
+    alert = {"id": "al-7", "nextSteps": [
+        {"text": "Do today's check-in", "action": {"label": "Open check-in", "route": "/daily#checkin"}},
+        {"text": "Retest", "action": {"label": "Retest now", "route": "/attention?retest={alertId}"}},
+        {"text": "Plain step"},
+        {"text": "Medicine step", "lockedForCMO": True, "action": {"label": "x", "route": "/resources"}},
+    ]}
+    steps = fallback.answer_steps(alert, arabic=False)
+    assert [(s.text, s.link) for s in steps] == [
+        ("Do today's check-in", "/daily#checkin"), ("Retest", "/attention?retest=al-7"),
+        ("Plain step", None), ("(needs CMO review)", None),
+    ]
+
+
+def test_seeded_fatigue_alert_actions_reach_alerts_api_and_assistant(monkeypatch):
+    """Real seed (no mocks): R-FAT-01's NextStep.action survives /api/alerts and becomes the
+    assistant's next-step links, with {alertId} filled in."""
+    from server.tests._daily_helpers import daily_client, open_alert
+    _no_model(monkeypatch)
+    with daily_client() as c:
+        a = open_alert(c, "R-FAT-01")
+        assert [s["action"]["route"] for s in a["nextSteps"]] == [
+            "/daily#checkin", f"/attention?retest={a['id']}", "/daily#exercise"]
+        body = c.post("/api/assistant/ask", json={"question": "Why did I get R-FAT-01?"}).json()
+        assert [s["link"] for s in body["nextSteps"]] == [
+            "/daily#checkin", f"/attention?retest={a['id']}", "/daily#exercise"]

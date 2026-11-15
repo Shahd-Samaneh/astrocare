@@ -61,6 +61,12 @@ Everything below is a request. Until it is merged, we work around it inside `ser
 
 ## 2. `Alert.nextSteps[].action`
 
+> **Status: done (2026-11-15, `marah/demo-fixes`).** `NextStepAction` + optional `NextStep.action` are in
+> `contracts.ts` and `core/models.py` exactly as below. Alert detail shows each step's action as a button and
+> the assistant's alert answer turns it into a next-step link (`fallback.step_link()`). `{alertId}` in a
+> route is filled in with the alert's id when rendered. CMO-locked steps never get a button.
+> `DailyNextStep` / the local `NextStepAction` still work (same field), and can now be dropped.
+
 **Why:**
 1. Alert detail can show a next step as a button that opens the right page (`/attention?retest=<id>`, `/daily#checkin`).
 2. That closes the demo loop: alert → retest → `recheck`, without Alert detail hard-coding Daily routes.
@@ -135,6 +141,9 @@ Everything below is a request. Until it is merged, we work around it inside `ser
 ---
 
 ## 4. Simulator
+
+> **Status: done (2026-11-15, `marah/demo-fixes`).** The check-in loop stops at yesterday; `daily_client()` no
+> longer deletes today's check-in, and `test_unmodified_seed_has_no_checkin_today` is no longer xfail.
 
 Checked after `npm run reseed`:
 

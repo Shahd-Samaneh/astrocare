@@ -287,8 +287,7 @@ def test_today_plan_shape_and_routes(client):
 
 
 def test_today_plan_checkin_status(client):
-    _delete("checkins", "ts >= ?", (iso(mission_day_start()),))  # today's check-in
-    assert _items(client)[1]["checkin"]["status"] == "todo"
+    assert _items(client)[1]["checkin"]["status"] == "todo"  # the seed has no check-in today
     db.insert("checkins", {"id": "ci-t1", "ts": iso(utcnow()), "mood": None, "stress": None, "note_private": None, "skipped": True})
     assert _items(client)[1]["checkin"]["status"] == "skipped"
     db.insert("checkins", {"id": "ci-t2", "ts": iso(utcnow()), "mood": 3, "stress": 2, "note_private": None, "skipped": False})

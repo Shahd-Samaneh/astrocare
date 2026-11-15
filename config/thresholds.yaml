@@ -37,8 +37,8 @@ spo2_low_minutes:
 sleep_short_hours:
   value: 6
   unit: h
-  source: "TODO: NASA sleep/fatigue guidance"
-  note: "Nights shorter than this count as short sleep."
+  source: "Trial value (team decision), see NASA sleep-risk evidence (references/nasa-hrp-sleep-risk.txt; it gives no hour cut-off)"
+  note: "experimental value. Nights shorter than this count as short sleep. Same value as daily.sleep_short_hours: keep the two in sync."
 
 attention_slower_pct:
   value: 15

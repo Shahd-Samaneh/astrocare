@@ -151,11 +151,17 @@ class Resource(ApiModel):
     contraindicated_allergies: list[str] = []
 
 
+class NextStepAction(ApiModel):
+    label: str
+    route: str  # in-app route, e.g. "/attention?retest=al-123" ("{alertId}" = this alert's id)
+
+
 class NextStep(ApiModel):
     text: str
     resource_id: Optional[str] = None
     availability: Optional[Availability] = None
     locked_for_cmo: bool = Field(default=False, alias="lockedForCMO")
+    action: Optional[NextStepAction] = None  # optional button; never shown for a CMO-locked step
 
 
 class Alert(ApiModel):

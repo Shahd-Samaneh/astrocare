@@ -262,11 +262,19 @@ function AlertView({ id }: { id: string }) {
                     const resource = step.resourceId ? inventory.data?.find((item) => item.id === step.resourceId) : undefined;
                     const check = assessResource(step, resource);
                     const locked = step.lockedForCMO || resource?.kind === 'medicine';
+                    // Optional in-app button (NextStep.action); same-app routes only, never on a CMO-locked step.
+                    const route = step.action?.route.replace('{alertId}', encodeURIComponent(alert.id));
+                    const actionTo = !locked && route?.startsWith('/') && !route.startsWith('//') ? route : null;
                     return (
                       <li className={styles.step} key={`${i}-${step.text}`}>
                         <span className={styles.stepIndex}>{i + 1}</span>
                         <div className={styles.stepMain}>
                           <p>{step.text}</p>
+                          {actionTo && step.action && (
+                            <div className={styles.actions}>
+                              <Link className={styles.secondaryButton} to={actionTo}>{step.action.label} <ArrowRight size={15} /></Link>
+                            </div>
+                          )}
                           {step.resourceId && <div className={styles.resourceStatus}>
                             <span className={`${styles.resourceTag} ${styles[`resource_${check.status}`]}`}>
                               <PackageCheck size={14} /> {check.label}
