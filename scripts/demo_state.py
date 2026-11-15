@@ -13,6 +13,8 @@ written and Ollama is not needed). Run scripts/demo_check.py too for the assista
   6. assistant permissions are at their defaults
   7. the Relax media files are present and served
   8. heart rate, SpO2 and respiration are still fresh (they go stale 2 h after a reseed)
+  9. the live feed is running (needs the server: npm run start / npm run dev), see
+     server/core/live_feed.py
 
 Exit code 0 when every check passed, 1 otherwise.
 """
@@ -111,7 +113,23 @@ def run_state_checks(log: Callable[[str], None] = print) -> list[tuple[str, bool
     check("Outbox empty", outbox)
     check("Assistant permissions at defaults", permissions)
     check("Relax media present", media)
+    def feed() -> tuple[bool, str]:
+        from server.core import db, live_feed
+        from server.core.config import parse_ts, utcnow
+        if not live_feed.settings()["enabled"]:
+            return False, "off: set simulator.live_feed.enabled: true in config/app.yaml"
+        beat = db.get_meta(live_feed.HEARTBEAT_KEY)
+        if not beat:
+            return False, "no heartbeat: start the server (npm run start / npm run dev); it ticks every minute"
+        age_s = (utcnow() - parse_ts(beat)).total_seconds()
+        if age_s > 180:
+            return False, f"last tick {age_s / 60:.0f} min ago: is the server running?"
+        live = db.query("readings", "id LIKE 'live-%'", order_by="ts DESC", limit=1)
+        last = f"; last live reading {(utcnow() - parse_ts(live[0]['ts'])).total_seconds() / 60:.0f} min ago" if live else ""
+        return True, f"tick {age_s:.0f} s ago, every {live_feed.settings()['every_minutes']:g} min{last}"
+
     check("HR / SpO2 / resp still fresh", fresh_vitals)
+    check("Live feed running", feed)
     return results
 
 
