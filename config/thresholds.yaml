@@ -151,6 +151,19 @@ radiation_deep_space_rate_msv_per_day:
   source: "NASA/JPL Mars Science Laboratory (MSL) RAD, cruise average dose equivalent (Zeitlin et al., Science 2013; references/nasa-msl-rad-cruise.txt)"
   note: "simulated estimate, not a dosimeter reading. Cumulative dose = mission day × this rate (server/features/monitoring/router.py)."
 
+# ---- Bone & muscle (illustrative estimate, no measurement) -------------------
+bone_loss_pct_per_month_min:
+  value: 1
+  unit: "%/month"
+  source: "NASA Human Research Program, Risk of Spaceflight-Induced Bone Changes (references/nasa-bone-risk.txt)"
+  note: "Lower end of the average bone density loss per month on 4-6 month missions ('between 1% and 1.5%'). Illustrative estimate only (server/features/monitoring/bone.py); bone density needs a DEXA scan on Earth."
+
+bone_loss_pct_per_month_max:
+  value: 1.5
+  unit: "%/month"
+  source: "NASA Human Research Program, Risk of Spaceflight-Induced Bone Changes (references/nasa-bone-risk.txt)"
+  note: "Upper end of the same NASA range. Illustrative estimate only, not a measurement."
+
 # ---- Vision self-check (no sensor; SANS) ------------------------------------
 vision_line_drop_min:
   value: 2
