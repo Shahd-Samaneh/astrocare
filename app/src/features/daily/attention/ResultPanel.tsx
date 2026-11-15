@@ -1,8 +1,7 @@
-// Owner: Shahd. Result of one attention test: median, lapses, false starts, % vs baseline.
+// Owner: Shahd. Result of one attention test: median, % vs baseline, lapses, false starts,
+// and last night's sleep as context.
 import { Badge, SimulatedBadge } from '../../../shared/components';
 import { rangeStatusOf, type RangeStatus, type TestResult } from '../api.attention';
-import { KSS_ANCHORS } from './kss';
-import { TrialPlot } from './TrialPlot';
 import styles from './Attention.module.css';
 
 export const EXPERIMENTAL_NOTE = 'Experimental. Does not decide fitness for duty.';
@@ -29,18 +28,10 @@ function pctText(pct: number | null) {
   return `${pct > 0 ? '+' : '−'}${Math.abs(pct).toFixed(0)} %`;
 }
 
-export function ResultPanel({
-  result,
-  lapseMs = null,
-}: {
-  result: TestResult;
-  lapseMs?: number | null;
-}) {
+export function ResultPanel({ result }: { result: TestResult }) {
   const { test, pctVsBaseline, withinRange, baseline } = result;
   const sleepContext = result.sleepContext ?? { sleptHours: null, hoursAwake: null, source: null };
-  const extended = test.mode === 'extended';
   const building = baseline.building ?? false;
-  const m = test.measures;
   return (
     <div className={styles.result}>
       <div className={styles.resultHead}>
@@ -51,7 +42,6 @@ export function ResultPanel({
         ) : (
           <RangeBadge status={rangeStatusOf(result.rangeStatus, withinRange, pctVsBaseline)} />
         )}
-        {extended && <Badge variant="pink">Extended · Experimental, not validated</Badge>}
         {test.context === 'retest' && <Badge variant="info">Retest</Badge>}
       </div>
       <dl className={styles.stats}>
@@ -84,60 +74,22 @@ export function ResultPanel({
           </dd>
         </div>
       </dl>
-      {extended && m && (
-        <dl className={styles.stats} aria-label="Extended test measures">
-          <div className={styles.stat}>
-            <dt>Mean RT</dt>
-            <dd>
-              <span className={styles.statValue}>{Math.round(m.meanMs)}</span> ms
-            </dd>
-          </div>
-          <div className={styles.stat}>
-            <dt>Fastest 10 %</dt>
-            <dd>
-              <span className={styles.statValue}>{Math.round(m.fastest10MeanMs)}</span> ms
-            </dd>
-          </div>
-          <div className={styles.stat}>
-            <dt>Slowest 10 %</dt>
-            <dd>
-              <span className={styles.statValue}>{Math.round(m.slowest10MeanMs)}</span> ms
-            </dd>
-          </div>
-          <div className={styles.stat}>
-            <dt>Response speed</dt>
-            <dd>
-              <span className={styles.statValue}>{m.responseSpeed.toFixed(2)}</span> 1/s
-            </dd>
-          </div>
-        </dl>
-      )}
-      {result.inputDiffers && (
-        <p className={styles.notice} role="note">
-          Different input method from your usual tests ({test.inputMethod} vs{' '}
-          {baseline.usualInputMethod}). Comparison may be less reliable.
-        </p>
-      )}
-      {building && (
+      {building ? (
         <p className={styles.meta}>
-          Building your baseline ({baseline.n}/{baseline.needed ?? 3}):{' '}
-          {extended ? 'extended' : 'quick'} tests are only compared with tests of the same length.
           After {baseline.needed ?? 3} earlier tests you’ll see whether a result is within your
           usual range.
         </p>
+      ) : (
+        baseline.rangeLowMs != null &&
+        baseline.rangeHighMs != null && (
+          <p className={styles.meta}>
+            Your usual range: {Math.round(baseline.rangeLowMs)}–{Math.round(baseline.rangeHighMs)}{' '}
+            ms ({baseline.n} earlier tests).
+          </p>
+        )
       )}
       <p className={styles.meta}>
-        Trials: {test.trialsMs.map((x) => `${Math.round(x)} ms`).join(' · ')}
-        {baseline.rangeLowMs != null && baseline.rangeHighMs != null && (
-          <>
-            {' '}
-            · Usual range {Math.round(baseline.rangeLowMs)}–{Math.round(baseline.rangeHighMs)} ms (
-            {baseline.n} earlier tests)
-          </>
-        )}
-      </p>
-      <p className={styles.meta}>
-        Context (from your sleep log): slept{' '}
+        Last night (from your sleep log): slept{' '}
         <strong>
           {sleepContext.sleptHours != null ? `${sleepContext.sleptHours.toFixed(1)} h` : '—'}
         </strong>{' '}
@@ -152,15 +104,6 @@ export function ResultPanel({
           </>
         )}
       </p>
-      {test.sleepinessKss != null && (
-        <p className={styles.meta}>
-          You rated sleepiness <strong>{test.sleepinessKss}/9</strong>
-          {KSS_ANCHORS[test.sleepinessKss] ? ` (${KSS_ANCHORS[test.sleepinessKss]})` : ''}, next to
-          a measured median of <strong>{Math.round(test.medianMs)} ms</strong>. Self-rating and
-          measured speed can disagree. Both are useful.
-        </p>
-      )}
-      <TrialPlot test={test} lapseMs={lapseMs} />
       <p className={styles.experimental} role="note">
         {EXPERIMENTAL_NOTE}
       </p>
