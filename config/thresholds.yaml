@@ -101,43 +101,44 @@ humidity_max:
   note: "Upper bound of the usual cabin relative-humidity range. comfort/performance zone; crew-health limit is [V2 6012] 18–27 °C, 25–75 %"
 
 # [V2 6012] crew-health limits: wider than the 6013 comfort zone above. Shown as context on the
-# Today cabin tiles only; NOT used by any rule yet. (TB-002 p. 4 writes the envelope as
+# Today cabin tiles; R-CAB-02 raises *review* outside them (info when only outside the 6013
+# zone). (TB-002 p. 4 writes the envelope as
 # 18 °C/75 % to 27 °C/25 %; p. 8 gives the ranges 18–27 °C and 25–75 %.)
 cabin_temp_health_min:
   value: 18
   unit: "°C"
   source: "NASA-STD-3001 Vol. 2 Rev D [V2 6012] Crew Health Environmental Limits, via NASA OCHMO-TB-002 Rev B (ECLSS), p. 4 and p. 8"
-  note: "Lower crew-health limit for cabin temperature. Not used by any rule yet."
+  note: "Lower crew-health limit for cabin temperature. R-CAB-02: review below this."
 
 cabin_temp_health_max:
   value: 27
   unit: "°C"
   source: "NASA-STD-3001 Vol. 2 Rev D [V2 6012] Crew Health Environmental Limits, via NASA OCHMO-TB-002 Rev B (ECLSS), p. 4 and p. 8"
-  note: "Upper crew-health limit for cabin temperature. Not used by any rule yet."
+  note: "Upper crew-health limit for cabin temperature. R-CAB-02: review above this."
 
 humidity_health_min:
   value: 25
   unit: "%"
   source: "NASA-STD-3001 Vol. 2 Rev D [V2 6012] Crew Health Environmental Limits, via NASA OCHMO-TB-002 Rev B (ECLSS), p. 4 and p. 8"
-  note: "Lower crew-health limit for cabin relative humidity. Not used by any rule yet."
+  note: "Lower crew-health limit for cabin relative humidity. R-CAB-02: review below this."
 
 humidity_health_max:
   value: 75
   unit: "%"
   source: "NASA-STD-3001 Vol. 2 Rev D [V2 6012] Crew Health Environmental Limits, via NASA OCHMO-TB-002 Rev B (ECLSS), p. 4 and p. 8"
-  note: "Upper crew-health limit for cabin relative humidity. Not used by any rule yet."
+  note: "Upper crew-health limit for cabin relative humidity. R-CAB-02: review above this."
 
 noise_sd_multiplier:
   value: 2
   unit: SD
-  source: "Team decision (no NASA noise limit in this source)"
-  note: "Cabin noise outside baseline mean ± k·SD of the last noise_baseline_days is flagged."
+  source: "Team decision (no sourced NASA noise limit in this file or references/)"
+  note: "team decision. 'Unusual vs your 7-day cabin average': latest cabin noise outside mean ± k·SD of the last noise_baseline_days. Today tile shows Above/Below usual; R-CAB-03 raises info (never review), only when above."
 
 noise_baseline_days:
   value: 7
   unit: d
   source: "Team decision"
-  note: "Look-back window for the cabin noise baseline (mean and SD)."
+  note: "team decision. Look-back window for the cabin noise baseline (mean and SD) used by the Today tile and R-CAB-03."
 
 radiation_career_limit_msv:
   value: 600

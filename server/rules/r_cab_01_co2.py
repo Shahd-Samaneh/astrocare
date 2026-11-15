@@ -10,9 +10,9 @@ cabin card and this alert agree whenever readings exist in the window. The logic
 is replicated here rather than imported from the router.
 
 It never names a cause: it lists *possible factors* and gives operational steps
-only (no medicine or treatment advice). Next steps, in order: confirm with a portable
-CO₂ reading, inform the crew member responsible for life support, move to a better-
-ventilated module, log symptoms in today's check-in, add to report.
+only (no medicine or treatment advice). Next steps come from
+server/features/monitoring/cabin_guidance.py ("co2_high", the same list the Today CO₂
+tile shows), followed by "add to report".
 
 Source: NASA-STD-3001 Vol. 2 [V2 6004] / NASA OCHMO Technical Brief TB-004.
 
@@ -23,6 +23,7 @@ from __future__ import annotations
 import statistics
 
 from server.core.models import NextStep, NextStepAction
+from server.features.monitoring import cabin_guidance
 
 from .base import AlertDraft, Rule, RuleContext
 
@@ -33,6 +34,7 @@ class CabinCo2Rule(Rule):
     sources = [
         "NASA-STD-3001 Vol. 2 [V2 6004] / NASA OCHMO Technical Brief TB-004 Carbon Dioxide",
         "config/thresholds.yaml: co2_max, co2_avg_window_minutes",
+        *cabin_guidance.sources("co2_high"),
     ]
 
     def evaluate(self, ctx: RuleContext) -> AlertDraft | None:
@@ -68,12 +70,8 @@ class CabinCo2Rule(Rule):
                 "Reduced air circulation",
                 "CO₂ removal system performance",
             ],
-            next_steps=[  # operational only, in this order; never medication
-                NextStep(text="Confirm with a portable CO₂ reading"),
-                NextStep(text="Inform the crew member responsible for life support"),
-                NextStep(text="Move to a better-ventilated module"),
-                NextStep(text="Log any symptoms (such as headache) in today's check-in",
-                         action=NextStepAction(label="Open check-in", route="/daily#checkin")),
+            next_steps=[  # operational only (cabin_guidance.py), then the report; never medication
+                *cabin_guidance.next_steps("co2_high"),
                 NextStep(text="Add this alert to the report",
                          action=NextStepAction(label="Open reports", route="/reports")),
             ],

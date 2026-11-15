@@ -198,13 +198,13 @@ def test_6012_and_6013_entries_trace_to_tb002_rev_b():
         assert t[key].value == value and "[V2 6012]" in t[key].source and "OCHMO-TB-002 Rev B" in t[key].source
 
 
-def test_health_limits_are_not_used_by_any_rule():
+def test_health_limits_are_used_only_by_r_cab_02():
     from pathlib import Path
 
     rules = Path(__file__).resolve().parents[1] / "rules"
-    for py in rules.glob("*.py"):
-        text = py.read_text(encoding="utf-8")
-        assert "_health_min" not in text and "_health_max" not in text, py.name
+    users = sorted(py.name for py in rules.glob("*.py")
+                   if "_health_min" in (text := py.read_text(encoding="utf-8")) or "_health_max" in text)
+    assert users == ["r_cab_02_temp_humidity.py"]
 
 
 def test_health_limit_hidden_when_it_has_no_real_source(client, monkeypatch):

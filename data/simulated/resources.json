@@ -24,6 +24,8 @@
     { "id": "eq-bp-cuff", "kind": "equipment", "name": "Blood pressure cuff", "qty": 1, "unit": "unit", "status": "available", "contraindicatedAllergies": [] },
     { "id": "eq-thermometer", "kind": "equipment", "name": "Digital thermometer", "qty": 2, "unit": "units", "status": "available", "contraindicatedAllergies": [] },
     { "id": "eq-ultrasound", "kind": "equipment", "name": "Portable ultrasound", "qty": 1, "unit": "unit", "status": "available", "contraindicatedAllergies": [] },
-    { "id": "eq-aed", "kind": "equipment", "name": "Automated external defibrillator", "qty": 1, "unit": "unit", "status": "available", "contraindicatedAllergies": [] }
+    { "id": "eq-aed", "kind": "equipment", "name": "Automated external defibrillator", "qty": 1, "unit": "unit", "status": "available", "contraindicatedAllergies": [] },
+    { "id": "eq-earplugs", "kind": "equipment", "name": "Earplugs", "qty": 20, "unit": "pairs", "status": "available", "contraindicatedAllergies": [] },
+    { "id": "eq-co2-monitor", "kind": "equipment", "name": "Portable CO2 monitor", "qty": 1, "unit": "unit", "status": "available", "contraindicatedAllergies": [] }
   ]
 }

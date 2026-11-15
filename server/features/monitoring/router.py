@@ -16,12 +16,14 @@ from server.core import db
 from server.core.config import has_real_source, iso, parse_ts, threshold, thresholds, utcnow
 from server.core.models import (
     CABIN_METRICS, METRICS, Alert, AlertStatus, ApiModel, CabinMetric, CabinReading, Metric, Profile,
-    Quality, Reading, Resource, Sensor, Source,
+    NextStep, Quality, Reading, Resource, Sensor, Source,
 )
 from server.core.simulator import UNITS
 from server.core.status import mission_clock, mission_day_start
 
-from . import bone, vision
+from server.rules.resources import check_resource
+
+from . import bone, cabin_guidance, vision
 from .bone import router as bone_router
 from .vision import router as vision_router
 
@@ -130,7 +132,7 @@ class CabinLimit(ApiModel):
     window_minutes is set when the limit applies to an average (co2).
     source is the full yaml text; source_label a short form for the screen.
     name labels the range when it has one ("Comfort zone" = [V2 6013]).
-    health_* is the wider [V2 6012] crew-health limit, display context only (no rule uses it).
+    health_* is the wider [V2 6012] crew-health limit (R-CAB-02 raises review outside it).
     """
 
     min: Optional[float] = None
@@ -145,6 +147,14 @@ class CabinLimit(ApiModel):
     health_source_label: Optional[str] = None
 
 
+class CabinGuidanceStep(NextStep):
+    """One "What to do" step on a cabin tile (cabin_guidance.py), resource-checked like an alert step.
+
+    source is the full citation for the step (cabin_guidance.SOURCES)."""
+
+    source: str
+
+
 class CabinLatest(ApiModel):
     """Latest cabin reading plus whether it sits inside the usual range.
 
@@ -152,6 +162,8 @@ class CabinLatest(ApiModel):
     For co2 the status is judged on the 1-hour average, not this single value.
     stale uses the vitals rule: no reading for longer than stale_minutes.
     limit is only present when thresholds.yaml has a numeric limit with a real source.
+    guidance: "What to do" steps, only when the status is unusual for that metric (empty otherwise).
+    alert_id: the open R-CAB-0x alert for this metric, when there is one.
     """
 
     metric: CabinMetric
@@ -162,6 +174,8 @@ class CabinLatest(ApiModel):
     age_minutes: Optional[int] = None
     stale: bool = False
     limit: Optional[CabinLimit] = None
+    guidance: list[CabinGuidanceStep] = []
+    alert_id: Optional[str] = None
 
 
 # Which threshold keys form each metric's displayed limit. Noise has none: its yaml entry is a
@@ -173,7 +187,7 @@ _CABIN_LIMIT_KEYS: dict[str, tuple[Optional[str], Optional[str], Optional[str]]]
     "humidity": ("humidity_min", "humidity_max", None),
 }
 _CABIN_LIMIT_NAMES = {"cabin_temp": "Comfort zone", "humidity": "Comfort zone"}  # [V2 6013]
-# [V2 6012] crew-health limits, shown next to the comfort zone (display only).
+# [V2 6012] crew-health limits, shown next to the comfort zone (R-CAB-02 uses them for review).
 _CABIN_HEALTH_KEYS = {
     "cabin_temp": ("cabin_temp_health_min", "cabin_temp_health_max"),
     "humidity": ("humidity_health_min", "humidity_health_max"),
@@ -260,6 +274,22 @@ def _cabin_status(metric: str, latest: CabinReading, now) -> CabinStatus:
     return "usual"
 
 
+def _cabin_guidance(metric: str, status: CabinStatus, now, profile: Optional[Profile],
+                    resources: list[Resource]) -> tuple[list[CabinGuidanceStep], Optional[str]]:
+    """Steps for an unusual cabin value (resource availability stamped) and the open alert, if any."""
+    key = cabin_guidance.guidance_key(metric, status)
+    if key is None:
+        return [], None
+    steps = [
+        CabinGuidanceStep(**check_resource(g.to_next_step(), profile, resources, now).model_dump(),
+                          source=cabin_guidance.SOURCES[g.source])
+        for g in cabin_guidance.steps(key)
+    ]
+    rows = db.query("alerts", "rule_id = ? AND status != 'closed'", (cabin_guidance.RULE_FOR_KEY[key],),
+                    order_by="ts DESC", limit=1)
+    return steps, (rows[0]["id"] if rows else None)
+
+
 @router.get("/cabin/latest")
 def cabin_latest() -> list[CabinLatest]:
     """Latest reading per cabin metric with a 'usual'/'above_usual'/'below_usual' status.
@@ -269,6 +299,9 @@ def cabin_latest() -> list[CabinLatest]:
     """
     now = utcnow()
     stale_min = float(threshold("stale_minutes"))
+    profile_rows = db.query("profiles", limit=1)
+    profile = Profile.model_validate(profile_rows[0]) if profile_rows else None
+    resources = [Resource.model_validate(r) for r in db.query("resources")]
     out: list[CabinLatest] = []
     for metric in CABIN_METRICS:
         limit = _cabin_limit(metric)
@@ -279,11 +312,13 @@ def cabin_latest() -> list[CabinLatest]:
             continue
         latest = CabinReading.model_validate(rows[0])
         age = int((now - parse_ts(latest.ts)).total_seconds() // 60)
+        status = _cabin_status(metric, latest, now)
+        guidance, alert_id = _cabin_guidance(metric, status, now, profile, resources)
         out.append(CabinLatest(
             metric=metric, value=latest.value, unit=latest.unit, ts=latest.ts,
-            status=_cabin_status(metric, latest, now),
+            status=status,
             age_minutes=age, stale=age > stale_min,  # same rule as GET /readings/latest
-            limit=limit,
+            limit=limit, guidance=guidance, alert_id=alert_id,
         ))
     return out
 

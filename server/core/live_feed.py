@@ -15,8 +15,9 @@ Cabin: every `cabin_every_minutes` (15) it also adds one simulated cabin reading
 `cabin_jitter_sd` × that metric's seeded SD), then clamped inside the thresholds.yaml limits:
   * co2 ≤ co2_max − 0.1, so no feed reading can push the 1-hour average over co2_max
     (R-CAB-01 can't fire from the feed)
-  * cabin_temp / humidity inside [min + 0.1, max − 0.1]
-  * noise inside the rolling noise baseline mean ± band_sd·SD (same window as the Today status)
+  * cabin_temp / humidity inside [min + 0.1, max − 0.1] (R-CAB-02 can't fire from the feed)
+  * noise inside the rolling noise baseline mean ± band_sd·SD (same window as the Today status;
+    R-CAB-03 needs > mean + 2 SD, so it can't fire from the feed)
 
 Config: config/app.yaml → simulator.live_feed {enabled, every_minutes, band_sd,
 cabin_every_minutes, cabin_jitter_sd}. Always off under
