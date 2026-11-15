@@ -42,11 +42,26 @@ def test_review_systems(client):
     assert "reaction" in s["cognition"]["text"] and "%" in s["cognition"]["text"]
 
 
+def test_radiation_is_a_simulated_estimate_within_limit(client):
+    rad = _systems(client)["radiation"]
+    day = client.get("/api/status").json()["missionDay"]
+    dose = int(day * 1.8 + 0.5)
+    assert rad["status"] == "stable"
+    assert rad["statusLabel"] == "within limit"
+    assert rad["simulated"] is True
+    assert rad["text"] == f"{dose} mSv · {int(dose_pct(day) + 0.5)}% of career limit (estimate)"
+    assert rad["alertId"] is None
+
+
+def dose_pct(day: int) -> float:
+    return day * 1.8 / 600 * 100
+
+
 def test_no_data_systems(client):
     s = _systems(client)
-    for sysid in ("radiation", "vision"):
-        assert s[sysid]["status"] == "no_data"
-        assert s[sysid]["text"] == "No connected measurements"
+    assert s["vision"]["status"] == "no_data"
+    assert s["vision"]["text"] == "No connected measurements"
+    assert s["vision"]["simulated"] is False and s["vision"]["statusLabel"] is None
     # skin patch is disconnected in the seed -> no_data with the sensor status
     assert s["thermoregulation"]["status"] == "no_data"
     assert "disconnected" in s["thermoregulation"]["text"]

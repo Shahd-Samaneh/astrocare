@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { api, useApi } from '../../../shared/api/client';
 import { useAppStatus } from '../../../shared/api/AppStatusContext';
-import { AlertBanner, Badge, Card, VitalCard } from '../../../shared/components';
+import { AlertBanner, Badge, Card, SimulatedBadge, VitalCard } from '../../../shared/components';
 import { SleepSummaryCard, TodayPlanCard } from '../../daily';
 import type {
   Alert,
@@ -44,17 +44,18 @@ const CABIN_METRICS: { metric: CabinMetric; label: string }[] = [
   { metric: 'humidity', label: 'Humidity' },
 ];
 
-/** Presentation only: status and explanation come exclusively from GET /body-systems. */
-const BODY_SYSTEM_TILES = [
+/** Presentation only: status and explanation come exclusively from GET /body-systems.
+ * `to`: page the tile opens when it has no linked alert. */
+const BODY_SYSTEM_TILES: { id: string; label: string; Icon: typeof Radiation; to?: string }[] = [
   { id: 'cardiovascular', label: 'Cardiovascular', Icon: HeartPulse },
   { id: 'respiratory', label: 'Respiratory & O₂', Icon: Wind },
   { id: 'sleep', label: 'Sleep & circadian', Icon: Moon },
   { id: 'cognition', label: 'Cognition & behaviour', Icon: Brain },
   { id: 'bone_muscle', label: 'Bone & muscle', Icon: Bone },
-  { id: 'radiation', label: 'Radiation exposure', Icon: Radiation },
+  { id: 'radiation', label: 'Radiation exposure', Icon: Radiation, to: '/radiation' },
   { id: 'vision', label: 'Vision & fluid shift', Icon: Eye },
   { id: 'thermoregulation', label: 'Thermoregulation', Icon: Thermometer },
-] as const;
+];
 
 /** Figure markers → sensor ids from GET /sensors, matched to each sensor's `location`.
  * The blood pressure cuff is stored in the medical kit (not worn), so it has no marker. */
@@ -261,26 +262,28 @@ export default function Today() {
           {systemsError && <p className={styles.error} role="alert">Could not load body-system status: {systemsError.message}</p>}
           {systemsLoading && !bodySystems && <p className={styles.muted}>Loading body-system status…</p>}
           <div className={styles.systemGrid}>
-            {BODY_SYSTEM_TILES.map(({ id, label, Icon }) => {
+            {BODY_SYSTEM_TILES.map(({ id, label, Icon, to }) => {
               // If the backend is unavailable, never infer a stable state from old vitals.
               const entry = systemsError ? undefined : bodySystems?.find((system) => system.id === id);
               const stateClass = entry?.status === 'stable' ? styles.systemStable
                 : entry?.status === 'review' ? styles.systemReview : styles.systemNoData;
+              const href = entry?.alertId ? `/alerts/${encodeURIComponent(entry.alertId)}` : entry && to ? to : undefined;
               const content = (
                 <>
                   <Icon size={23} aria-hidden />
                   <span className={styles.systemDetails}>
-                    <strong>{label}</strong>
+                    <strong>{label}{entry?.simulated && <> <SimulatedBadge /></>}</strong>
                     <small>{entry?.text ?? (systemsLoading ? 'Loading…' : 'Status unavailable')}</small>
                     <span className={styles.systemStatus}>
                       {entry ? BODY_STATUS_LABELS[entry.status] : 'Unavailable'}
+                      {entry?.statusLabel && ` · ${entry.statusLabel}`}
                     </span>
                   </span>
-                  {entry?.alertId && <ArrowRight size={15} className={styles.systemArrow} aria-hidden />}
+                  {href && <ArrowRight size={15} className={styles.systemArrow} aria-hidden />}
                 </>
               );
-              return entry?.alertId ? (
-                <Link key={id} className={`${styles.systemTile} ${stateClass}`} to={`/alerts/${encodeURIComponent(entry.alertId)}`}>
+              return href ? (
+                <Link key={id} className={`${styles.systemTile} ${stateClass}`} to={href}>
                   {content}
                 </Link>
               ) : (

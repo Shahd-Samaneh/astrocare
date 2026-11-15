@@ -250,4 +250,29 @@ export interface BodySystem {
   status: 'stable' | 'review' | 'no_data';
   text: string;
   alertId: string | null;
+  /** Short qualifier after the status, e.g. "within limit" (radiation). */
+  statusLabel?: string | null;
+  /** The value is a simulated estimate, not a measurement (radiation). */
+  simulated?: boolean;
+}
+
+/** GET /radiation/estimate: mission day × MSL RAD cruise rate, against the NASA career limit. */
+export interface RadiationEstimate {
+  available: boolean;
+  missionDay: number;
+  rateMsvPerDay: number | null;
+  cumulativeMsv: number | null;
+  careerLimitMsv: number | null;
+  pctOfLimit: number | null;
+  withinLimit: boolean | null;
+  label: string;
+  source: Source;
+  rateSource: string | null;
+  rateSourceLabel: string | null;
+  limitSource: string | null;
+  limitSourceLabel: string | null;
+  note: string;
+  scopeNote: string;
+  comparison: string;
+  comparisonSource: string;
 }

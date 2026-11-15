@@ -1,0 +1,13 @@
+.note { margin: 0 0 16px; padding: 11px 14px; border-radius: 10px; font-size: .87rem; line-height: 1.5;
+  border: 1px solid color-mix(in srgb, var(--warn, #fbbf57) 28%, transparent);
+  background: color-mix(in srgb, var(--warn, #fbbf57) 7%, transparent); }
+.value { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin: 0 0 12px; }
+.value strong { font-size: 1.9rem; letter-spacing: -.03em; }
+.value span { font-size: .9rem; opacity: .8; }
+.bar { height: 12px; border-radius: 6px; overflow: hidden; background: color-mix(in srgb, currentColor 12%, transparent); }
+.fill { display: block; height: 100%; border-radius: inherit; background: var(--accent, #65bdff); }
+.scale { display: flex; justify-content: space-between; margin: 6px 0 14px; font-size: .75rem; opacity: .65; }
+.muted { opacity: .7; font-size: .84rem; line-height: 1.5; }
+.sources { margin: 12px 0; padding-inline-start: 18px; font-size: .82rem; line-height: 1.6; overflow-wrap: anywhere; }
+.comparison { margin: 14px 0 0; padding-top: 12px; font-size: .84rem; line-height: 1.5;
+  border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent); }

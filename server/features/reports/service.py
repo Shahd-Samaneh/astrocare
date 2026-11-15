@@ -184,6 +184,8 @@ REPORT_SOURCES: list[str] = [
     "Behavioral Changes and Psychiatric Disorders (nasa.gov/hrp/risks)",
     "NASA Human Research Program, Ongoing research: ARCHeR, Artemis II (nasa.gov/hrp/ongoing-hrp-research)",
     "Canadian Space Agency, Monitoring radiation and astronaut health, 2026 (asc-csa.gc.ca)",
+    "NASA-STD-3001 Vol. 1 [V1 4030] career radiation limit, via NASA OCHMO-TB-020 radiation brief (nasa.gov)",
+    "Zeitlin et al., Mars Science Laboratory RAD cruise dose, Science 2013 (doi.org/10.1126/science.1235989)",
 ]
 SIMULATED_LINE = "All data is simulated (SIMULATED). This report is a hackathon demo, not medical advice."
 
@@ -291,8 +293,15 @@ def _section_items(items: list[dict[str, Any]]) -> str:
 
 
 def _section_radiation() -> str:
-    return ("Radiation card not available yet in this build. Reference limits: 600 mSv career "
-            "(NASA-STD-3001); neutrons are about 30% of the ISS dose (CSA, CANS).")
+    from server.features.monitoring.router import radiation_estimate  # read only, Monitoring's code
+    est = radiation_estimate()
+    if not est.available:
+        return f"No radiation estimate: the rate or the career limit has no sourced value. {est.comparison}."
+    limit_status = "within" if est.within_limit else "at or above"
+    return (f"{est.label}: {est.cumulative_msv} mSv after {est.mission_day} mission days "
+            f"({est.rate_msv_per_day:g} mSv/day, {est.rate_source_label}) = {est.pct_of_limit}% of the "
+            f"{est.career_limit_msv:g} mSv career limit ({est.limit_source_label}); {limit_status} limit. "
+            f"{est.note} {est.scope_note} {est.comparison}.")
 
 
 _BUILDERS = {
