@@ -24,6 +24,7 @@ from server.features.daily.router import router as daily_router
 from server.features.monitoring.router import router as monitoring_router
 from server.features.relax.router import router as relax_router
 from server.features.reports.router import router as reports_router
+from server.features.twin.router import router as twin_router
 from server.rules.engine import run_rules
 
 log = logging.getLogger("astrocare")
@@ -46,7 +47,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="AstroCare API", version="0.1.0", lifespan=lifespan)
 
-for r in (monitoring_router, daily_router, assistant_router, reports_router, relax_router):
+for r in (monitoring_router, daily_router, assistant_router, reports_router, relax_router, twin_router):
     app.include_router(r, prefix="/api")
 
 

@@ -1,4 +1,5 @@
 // All routes. Each SideNav item has a route here (see NAV_GROUPS in shared/components/SideNav.tsx).
+import { lazy, Suspense } from 'react';
 import type { RouteObject } from 'react-router-dom';
 import AttentionCheck from './features/daily/pages/AttentionCheck';
 import DailyLog from './features/daily/pages/DailyLog';
@@ -13,14 +14,25 @@ import Vitals from './features/monitoring/pages/Vitals';
 import Assistant from './features/support/pages/Assistant';
 import Relax from './features/support/pages/Relax';
 import Reports from './features/support/pages/Reports';
-import { EmptyState, Button } from './shared/components';
+import { EmptyState, Button, LoadingState } from './shared/components';
 import { AppShell } from './shared/layout/AppShell';
+
+// Lazy: keeps three.js out of the other pages' bundle (owner: Shahd).
+const Twin = lazy(() => import('./features/twin/TwinPage'));
 
 export const pageRoutes: RouteObject[] = [
   { index: true, element: <Today /> },
   { path: 'vitals', element: <Vitals /> },
   { path: 'alerts', element: <AlertDetail /> },
   { path: 'alerts/:id', element: <AlertDetail /> },
+  {
+    path: 'twin',
+    element: (
+      <Suspense fallback={<LoadingState label="Loading digital twin…" />}>
+        <Twin />
+      </Suspense>
+    ),
+  },
   { path: 'daily', element: <DailyLog /> },
   { path: 'attention', element: <AttentionCheck /> },
   { path: 'relax', element: <Relax /> },
