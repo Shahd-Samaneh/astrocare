@@ -8,6 +8,9 @@ mission:
   # The mission clock keeps running from this point (stored in the DB at seed time).
   met_at_seed: "142:07:31"
 
+# Demo-only controls (e.g. "Simulate event (demo)" on Crew alerts). false hides them.
+demo: true
+
 crew:
   astronaut_id: "c2"
   name: "Crew Member 2"
