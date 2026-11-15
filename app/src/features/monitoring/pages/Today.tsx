@@ -45,15 +45,16 @@ const CABIN_METRICS: { metric: CabinMetric; label: string }[] = [
 ];
 
 /** Presentation only: status and explanation come exclusively from GET /body-systems.
- * `to`: page the tile opens when it has no linked alert. */
-const BODY_SYSTEM_TILES: { id: string; label: string; Icon: typeof Radiation; to?: string }[] = [
+ * `to`: page the tile opens when it has no linked alert.
+ * `pageFirst`: open `to` even with a linked alert (vision: the self-check page shows the change). */
+const BODY_SYSTEM_TILES: { id: string; label: string; Icon: typeof Radiation; to?: string; pageFirst?: boolean }[] = [
   { id: 'cardiovascular', label: 'Cardiovascular', Icon: HeartPulse },
   { id: 'respiratory', label: 'Respiratory & O₂', Icon: Wind },
   { id: 'sleep', label: 'Sleep & circadian', Icon: Moon },
   { id: 'cognition', label: 'Cognition & behaviour', Icon: Brain },
   { id: 'bone_muscle', label: 'Bone & muscle', Icon: Bone },
   { id: 'radiation', label: 'Radiation exposure', Icon: Radiation, to: '/radiation' },
-  { id: 'vision', label: 'Vision & fluid shift', Icon: Eye },
+  { id: 'vision', label: 'Vision & fluid shift', Icon: Eye, to: '/vision', pageFirst: true },
   { id: 'thermoregulation', label: 'Thermoregulation', Icon: Thermometer },
 ];
 
@@ -262,12 +263,13 @@ export default function Today() {
           {systemsError && <p className={styles.error} role="alert">Could not load body-system status: {systemsError.message}</p>}
           {systemsLoading && !bodySystems && <p className={styles.muted}>Loading body-system status…</p>}
           <div className={styles.systemGrid}>
-            {BODY_SYSTEM_TILES.map(({ id, label, Icon, to }) => {
+            {BODY_SYSTEM_TILES.map(({ id, label, Icon, to, pageFirst }) => {
               // If the backend is unavailable, never infer a stable state from old vitals.
               const entry = systemsError ? undefined : bodySystems?.find((system) => system.id === id);
               const stateClass = entry?.status === 'stable' ? styles.systemStable
                 : entry?.status === 'review' ? styles.systemReview : styles.systemNoData;
-              const href = entry?.alertId ? `/alerts/${encodeURIComponent(entry.alertId)}` : entry && to ? to : undefined;
+              const href = entry && to && pageFirst ? to
+                : entry?.alertId ? `/alerts/${encodeURIComponent(entry.alertId)}` : entry && to ? to : undefined;
               const content = (
                 <>
                   <Icon size={23} aria-hidden />

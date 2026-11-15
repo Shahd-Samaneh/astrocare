@@ -57,11 +57,16 @@ def dose_pct(day: int) -> float:
     return day * 1.8 / 600 * 100
 
 
+def test_vision_tile_reflects_the_seeded_self_check(client):
+    # No sensor: the tile comes from the seeded self-checks (days 130 + 137, no change).
+    v = _systems(client)["vision"]
+    assert v["status"] == "stable"
+    assert v["text"] == "Self-check · last mission day 137"
+    assert v["simulated"] is False and v["statusLabel"] == "no change vs baseline"
+
+
 def test_no_data_systems(client):
     s = _systems(client)
-    assert s["vision"]["status"] == "no_data"
-    assert s["vision"]["text"] == "No connected measurements"
-    assert s["vision"]["simulated"] is False and s["vision"]["statusLabel"] is None
     # skin patch is disconnected in the seed -> no_data with the sensor status
     assert s["thermoregulation"]["status"] == "no_data"
     assert "disconnected" in s["thermoregulation"]["text"]

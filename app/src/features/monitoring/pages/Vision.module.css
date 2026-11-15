@@ -1,0 +1,45 @@
+.layout { display: grid; gap: 16px; }
+.disclaimer { margin: 0 0 16px; padding: 11px 14px; border-radius: var(--radius); font-size: .9rem; line-height: 1.5;
+  border: 1px solid var(--warn-border); background: var(--warn-bg); color: var(--text); }
+.muted { color: var(--text-muted); font-size: .86rem; line-height: 1.5; }
+.result { margin: 0; font-size: 1rem; }
+.saved { margin: 0 0 8px; color: var(--ok); font-size: .88rem; }
+.due { margin: 10px 0 0; color: var(--warn); font-size: .9rem; }
+.error { margin: 10px 0 0; color: var(--danger); font-size: .88rem; }
+.changes { margin: 0 0 8px; padding-inline-start: 18px; line-height: 1.6; font-weight: 600; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
+
+.instructions { margin: 0 0 14px; padding-inline-start: 18px; font-size: .9rem; line-height: 1.6; color: var(--text-2); }
+
+/* Near-vision card: dark text on a light panel, sizes set inline in CSS px. */
+.card { list-style: none; margin: 0 0 16px; padding: 18px 20px; border-radius: var(--radius-md);
+  background: #f7f7f2; color: #111; font-family: var(--font-body); line-height: 1.35; overflow-wrap: anywhere; }
+.card li { display: flex; align-items: baseline; gap: 12px; padding: 4px 0; }
+.lineNum { flex: none; width: 2.2em; font-size: 12px; font-family: var(--font-mono); color: #555; }
+
+.fieldset { border: 0; margin: 0 0 14px; padding: 0; min-width: 0; }
+.fieldset legend { padding: 0; margin-bottom: 8px; font-size: .9rem; font-weight: 600; }
+.options { display: flex; flex-wrap: wrap; gap: 8px; }
+.option { position: relative; display: inline-flex; align-items: center; justify-content: center;
+  min-width: var(--tap-min); min-height: var(--tap-min); padding: 0 10px; border-radius: var(--radius);
+  border: 1px solid var(--border-input); background: var(--bg-panel); cursor: pointer; font-weight: 600; }
+.option:hover { background: var(--bg-active); }
+.option input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.option:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wide { min-width: 88px; }
+.selected { border-color: var(--accent); background: var(--bg-active); color: var(--text-on-active); }
+
+.grid { display: block; max-width: 100%; height: auto; margin: 0 auto 16px; }
+.gridBg { fill: #f7f7f2; }
+.gridLine { stroke: #111; stroke-width: 1; }
+.gridDot { fill: #111; }
+
+.notesLabel { display: block; margin: 4px 0 6px; font-size: .9rem; font-weight: 600; }
+.notes { width: 100%; min-height: var(--tap-min); padding: 10px 12px; border-radius: var(--radius); resize: vertical;
+  border: 1px solid var(--border-input); background: var(--bg-panel); color: var(--text); font: inherit; }
+
+.tableWrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.table th, .table td { text-align: start; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.table th { color: var(--text-muted); font-weight: 600; }
+.why { margin: 0 0 8px; line-height: 1.6; }

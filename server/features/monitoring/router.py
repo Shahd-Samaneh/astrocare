@@ -21,7 +21,11 @@ from server.core.models import (
 from server.core.simulator import UNITS
 from server.core.status import mission_clock, mission_day_start
 
+from . import vision
+from .vision import router as vision_router
+
 router = APIRouter(tags=["monitoring"])
+router.include_router(vision_router)  # /vision/checks, /vision/summary
 
 
 @router.get("/profile")
@@ -313,6 +317,7 @@ class BodySystem(ApiModel):
 
     status_label: short qualifier shown after the status ("within limit"); None for most tiles.
     simulated: the tile's value is a simulated estimate (radiation), not a measurement.
+    Vision has no sensor: its tile reflects the crew's self-check (server/features/monitoring/vision.py).
     """
 
     id: str
@@ -505,16 +510,21 @@ def body_systems() -> list[BodySystem]:
         "sleep": _sleep(),
         "cognition": _cognition(profile),
         "bone_muscle": _bone_muscle(today),
-        "vision": ("no_data", _NO_MEASUREMENTS),
         "thermoregulation": _thermoregulation(profile, now, sensors),
     }
     rad_status, rad_text, rad_label = _radiation(today)
     computed["radiation"] = (rad_status, rad_text)
+    vis_status, vis_text, vis_label = vision.body_system_tile(now)
+    computed["vision"] = (vis_status, vis_text)
 
     out: list[BodySystem] = []
     for system in BODY_SYSTEMS:
         status, text = computed[system]
-        extra = {"status_label": rad_label, "simulated": rad_status != "no_data"} if system == "radiation" else {}
+        extra: dict = {}
+        if system == "radiation":
+            extra = {"status_label": rad_label, "simulated": rad_status != "no_data"}
+        elif system == "vision":
+            extra = {"status_label": vis_label}
         alert_id = None
         alert = next((a for a in open_alerts if a.rule_id.startswith(SYSTEM_RULE_PREFIXES[system])), None)
         if alert is not None:

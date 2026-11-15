@@ -276,3 +276,55 @@ export interface RadiationEstimate {
   comparison: string;
   comparisonSource: string;
 }
+
+/** GET/POST /vision/checks: one near-vision card + Amsler grid self-check for one eye (no sensor). */
+export interface VisionCheck {
+  id: string;
+  ts: string;
+  eye: 'left' | 'right' | 'both';
+  /** Smallest line read comfortably at arm's length; line 1 is the largest text. */
+  nearVisionSmallestLine: number;
+  /** Any grid lines looked wavy, blurred or missing. */
+  amslerChanged: boolean;
+  notes: string | null;
+  source: 'self' | 'simulated';
+}
+
+export interface VisionCheckIn {
+  eye: VisionCheck['eye'];
+  nearVisionSmallestLine: number;
+  amslerChanged: boolean;
+  notes?: string | null;
+}
+
+export interface VisionEyeResult {
+  eye: 'left' | 'right';
+  baseline: VisionCheck | null;
+  latest: VisionCheck | null;
+  /** > 0 = a larger line (fewer lines read) than at baseline. */
+  linesMoved: number | null;
+  linesChanged: boolean;
+  gridChanged: boolean;
+}
+
+/** GET /vision/summary: latest self-check vs the first (baseline) check. Never a diagnosis. */
+export interface VisionSummary {
+  status: 'stable' | 'review' | 'no_data';
+  changed: boolean;
+  due: boolean;
+  /** "Same as baseline", or the changes joined with "; ". */
+  result: string;
+  changes: string[];
+  eyes: VisionEyeResult[];
+  lastTs: string | null;
+  lastMissionDay: number | null;
+  baselineTs: string | null;
+  baselineMissionDay: number | null;
+  lineDropMin: number;
+  dueDays: number;
+  linesOnCard: number;
+  disclaimer: string;
+  why: string;
+  sourceRef: string;
+  sourceTitle: string;
+}

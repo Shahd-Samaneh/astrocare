@@ -151,6 +151,19 @@ radiation_deep_space_rate_msv_per_day:
   source: "NASA/JPL Mars Science Laboratory (MSL) RAD, cruise average dose equivalent (Zeitlin et al., Science 2013; references/nasa-msl-rad-cruise.txt)"
   note: "simulated estimate, not a dosimeter reading. Cumulative dose = mission day × this rate (server/features/monitoring/router.py)."
 
+# ---- Vision self-check (no sensor; SANS) ------------------------------------
+vision_line_drop_min:
+  value: 2
+  unit: lines
+  source: "Trial value (team decision), see NASA HRP SANS risk (references/nasa-hrp-risks.txt; it gives no self-check cut-off)"
+  note: "trial value (team decision). The smallest readable near-vision line moved this many lines (or more) towards larger text vs the baseline check counts as a change (R-VIS-01). A self-check, not a diagnosis."
+
+vision_check_due_days:
+  value: 14
+  unit: d
+  source: "Trial value (team decision)"
+  note: "trial value (team decision). No vision self-check in this many days: the Today tile shows 'Self-check due' (No data)."
+
 # ---- Daily pair (Shahd + Nadia) ---------------------------------------------
 # Read by server/features/daily/attention_stats.py::daily_threshold(). The group
 # itself has value/source/note so the flat core loader (and its "every threshold
