@@ -4,7 +4,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity, Bell, Bone, CalendarDays, Eye, FileText, LayoutGrid, Leaf, Lock, MessageSquare, Package,
-  Radiation, Target, User,
+  PersonStanding, Radiation, Target, User,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { Logo } from './Logo';
@@ -31,6 +31,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: '/', label: 'Today', icon: LayoutGrid },
       { to: '/vitals', label: 'Vitals', icon: Activity },
       { to: '/alerts', label: 'Alerts', icon: Bell, badge: 'alerts' },
+      { to: '/twin', label: 'Digital twin', icon: PersonStanding },
     ],
   },
   {

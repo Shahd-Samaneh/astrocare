@@ -1,0 +1,79 @@
+.actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.disclaimer {
+  margin: 0 0 14px;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.notice {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.layoutList {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.main,
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.stage {
+  position: relative;
+  height: min(62vh, 620px);
+  min-height: 420px;
+}
+
+.stageBar {
+  position: absolute;
+  inset: auto 12px 12px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.stageBar > * {
+  pointer-events: auto;
+}
+
+.stageLabel {
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 0.8rem;
+}
+
+@media (max-width: 1100px) {
+  .layout,
+  .layoutList {
+    grid-template-columns: 1fr;
+  }
+}
