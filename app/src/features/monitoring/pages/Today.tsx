@@ -97,13 +97,25 @@ function formatMetric(value: number, unit: string): string {
   return `${Number(value.toFixed(1))} ${unit}`.trim();
 }
 
-/** "Limit ≤ 3 mmHg (1-h average)" / "Range 20–25 °C". Numbers come from GET /cabin/latest only. */
-function formatLimit({ min, max, unit, windowMinutes }: CabinLimit): string {
-  const u = unit === '%' ? '%' : ` ${unit}`;
+function unitSuffix(unit: string): string {
+  return unit === '%' ? '%' : ` ${unit}`;
+}
+
+/** "Limit ≤ 3 mmHg (1-h average)" / "Comfort zone 20–25 °C". Numbers come from GET /cabin/latest only. */
+function formatLimit({ min, max, unit, windowMinutes, name }: CabinLimit): string {
+  const u = unitSuffix(unit);
   const avg = windowMinutes ? ` (${windowMinutes % 60 === 0 ? `${windowMinutes / 60}-h` : `${windowMinutes}-min`} average)` : '';
-  if (min != null && max != null) return `Range ${min}–${max}${u}${avg}`;
+  if (min != null && max != null) return `${name ?? 'Range'} ${min}–${max}${u}${avg}`;
   if (max != null) return `Limit ≤ ${max}${u}${avg}`;
   return `Limit ≥ ${min}${u}${avg}`;
+}
+
+/** Tooltip: full source, plus the wider [V2 6012] crew-health limit when the API gives one. */
+function limitTooltip(limit: CabinLimit): string {
+  const health = limit.healthMin != null && limit.healthMax != null
+    ? `\nCrew-health limit: ${limit.healthMin}–${limit.healthMax}${unitSuffix(limit.unit)} · ${limit.healthSourceLabel ?? ''}`.trimEnd()
+    : '';
+  return `Source: ${limit.source}${health}`;
 }
 
 /** Small plot built from actual readings; no sample values are inserted. */
@@ -352,7 +364,7 @@ export default function Today() {
                   </span>
                   <strong>{entry?.value != null ? formatMetric(entry.value, entry.unit) : '—'}</strong>
                   {entry?.limit && (
-                    <span className={styles.cabinLimit} title={`Source: ${entry.limit.source}`}>
+                    <span className={styles.cabinLimit} title={limitTooltip(entry.limit)}>
                       {formatLimit(entry.limit)} · {entry.limit.sourceLabel}
                     </span>
                   )}
