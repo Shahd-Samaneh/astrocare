@@ -20,6 +20,7 @@ from server.core.models import (
 )
 from server.core.simulator import UNITS
 from server.core.status import mission_clock, mission_day_start
+from server.features.daily.thresholds import daily_threshold
 
 router = APIRouter(tags=["monitoring"])
 
@@ -383,13 +384,40 @@ def _cognition(profile: Optional[Profile]) -> tuple[BodySystemStatus, str]:
 
 def _bone_muscle(today: int) -> tuple[BodySystemStatus, str]:
     # Only past days of this mission week (today excluded: it is not over yet).
-    plan_day = {p["id"]: p["day"] for p in db.query("exercise_plans")}
-    logs = [l for l in db.query("exercise_logs") if today - 6 <= plan_day.get(l["plan_id"], -1) <= today - 1]
+    from server.features.daily.exercise import latest_log
+
+    plans = [p for p in db.query("exercise_plans") if p.get("day") is not None and today - 6 <= p["day"] <= today - 1]
+    latest_by_plan = {p["id"]: latest_log(p["id"]) for p in plans}
+    logs = [log for log in latest_by_plan.values() if log is not None]
+    logged = {plan_id: log["status"] for plan_id, log in latest_by_plan.items() if log is not None}
+    done = sum(1 for log in logs if log["status"] == "done")
+    partial = sum(1 for log in logs if log["status"] == "partial")
+    text = f"{done} done, {partial} partial this week"
+    if db.query("alerts", "rule_id = 'R-EX-01' AND status != 'closed'", limit=1):
+        return "review", text
     if not logs:
         return "no_data", "No exercise logged this week"
-    done = sum(1 for l in logs if l["status"] == "done")
-    partial = sum(1 for l in logs if l["status"] == "partial")
-    return "stable", f"{done} done, {partial} partial this week"
+    missed_days = int(daily_threshold("exercise_missed_days"))
+    consecutive_missed = 0
+    for day in range(today - 1, today - missed_days - 1, -1):
+        day_plans = [p for p in plans if p.get("day") == day]
+        if not day_plans or any(logged.get(p["id"]) in ("done", "partial") for p in day_plans):
+            break
+        consecutive_missed += 1
+    if consecutive_missed >= missed_days:
+        return "review", text
+    completed = sum(1 for p in plans if logged.get(p["id"]) in ("done", "partial"))
+    if completed * 2 <= len(plans):
+        return "review", text
+    return "stable", text
+
+
+@router.get("/bone-risk-estimate")
+def bone_risk_estimate() -> dict:
+    minimum = thresholds()["bone_loss_monthly_min"]
+    maximum = thresholds()["bone_loss_monthly_max"]
+    return {"minimum": minimum.value, "maximum": maximum.value, "unit": "%/month",
+            "source": minimum.source, "reference": "nasa-bone-risk"}
 
 
 def _thermoregulation(profile: Optional[Profile], now, sensors: list[Sensor]) -> tuple[BodySystemStatus, str]:

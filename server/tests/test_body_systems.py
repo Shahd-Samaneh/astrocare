@@ -34,6 +34,29 @@ def test_stable_systems(client):
     assert "%" not in s["bone_muscle"]["text"]  # no percentage, per spec
 
 
+def test_bone_muscle_uses_latest_log_once_per_planned_session(client):
+    # A newer skipped log replaces the seeded completion for day 140. It changes
+    # the strict-majority outcome, and must not be counted alongside the old log.
+    db.insert("exercise_logs", {
+        "id": "exl-bone-newer-skip", "plan_id": "ex-140", "ts": "2099-01-01T00:00:00Z",
+        "status": "skipped", "reason": "time", "alternative_id": None,
+    })
+    assert client.get("/api/exercise/plan?day=140").json()[0]["log"]["status"] == "skipped"
+    bone = _systems(client)["bone_muscle"]
+    assert bone["status"] == "review"
+    assert bone["text"] == "0 done, 1 partial this week"
+
+    # A still newer done log changes the same planned session back to complete.
+    db.insert("exercise_logs", {
+        "id": "exl-bone-newer-done", "plan_id": "ex-140", "ts": "2100-01-01T00:00:00Z",
+        "status": "done", "reason": None, "alternative_id": None,
+    })
+    assert client.get("/api/exercise/plan?day=140").json()[0]["log"]["status"] == "done"
+    bone = _systems(client)["bone_muscle"]
+    assert bone["status"] == "stable"
+    assert bone["text"] == "1 done, 1 partial this week"
+
+
 def test_review_systems(client):
     s = _systems(client)
     assert s["sleep"]["status"] == "review"

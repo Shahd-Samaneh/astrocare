@@ -275,6 +275,7 @@ export default function Today() {
                     <span className={styles.systemStatus}>
                       {entry ? BODY_STATUS_LABELS[entry.status] : 'Unavailable'}
                     </span>
+                    {id === 'bone_muscle' && <small>Exercise is the main countermeasure for bone and muscle loss</small>}
                   </span>
                   {entry?.alertId && <ArrowRight size={15} className={styles.systemArrow} aria-hidden />}
                 </>

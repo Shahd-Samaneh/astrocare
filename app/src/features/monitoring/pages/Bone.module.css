@@ -1,0 +1,15 @@
+.page{display:flex;flex-direction:column;gap:21px;padding-bottom:35px;min-width:0}
+.header{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap}
+.back{display:inline-flex;align-items:center;gap:8px;color:inherit;text-decoration:none;opacity:.83;font-size:.87rem;font-weight:700}
+.eyebrow{font-size:.74rem;font-weight:750;letter-spacing:.09em;opacity:.7;margin:22px 0 8px}
+.header h1{font-size:clamp(1.8rem,3vw,2.4rem);letter-spacing:-.034em;line-height:1.17;margin:0}
+.description{margin:9px 0 0;font-size:.92rem;opacity:.75;line-height:1.5}
+.action{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:9px;background:var(--accent,#65bdff);color:#102035;text-decoration:none;font-weight:750;font-size:.86rem}
+.counts{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:10px;margin:0}
+.counts div{padding:14px;border-radius:10px;background:color-mix(in srgb,currentColor 5%,transparent)}
+.counts dt{font-size:.78rem;opacity:.7}.counts dd{font-size:1.5rem;font-weight:750;margin:5px 0 0}
+.estimate{font-size:1rem;line-height:1.6;margin:0 0 12px}.estimate strong{font-size:1.2rem}
+.caution,.source,.muted,.error{font-size:.83rem;line-height:1.55;margin:0 0 10px;opacity:.8}
+.caution{font-weight:700}.source{margin-bottom:0;overflow-wrap:anywhere}.source a{color:inherit}
+.error{color:var(--danger,#ff838c);opacity:1}
+@media(max-width:680px){.eyebrow{margin-top:16px}.action{width:100%;justify-content:center}}

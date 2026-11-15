@@ -190,3 +190,16 @@ daily:
     unit: days
     source: "Team decision (no published cut-off chosen yet)"
     note: "experimental value. Used by Nadia's R-EX-01."
+
+# Illustrative bone-density estimate; values quoted by NASA for 4–6 month missions.
+bone_loss_monthly_min:
+  value: 1
+  unit: "%/month"
+  source: "NASA: Risk of spaceflight-induced bone changes (references/nasa-bone-risk.txt)"
+  note: "Lower end of NASA's reported average monthly bone-density loss in microgravity; illustrative only."
+
+bone_loss_monthly_max:
+  value: 1.5
+  unit: "%/month"
+  source: "NASA: Risk of spaceflight-induced bone changes (references/nasa-bone-risk.txt)"
+  note: "Upper end of NASA's reported average monthly bone-density loss in microgravity; illustrative only."
