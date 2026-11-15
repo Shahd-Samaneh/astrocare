@@ -4,6 +4,7 @@ Working stubs that read the DB. Extend freely inside this folder.
 """
 from __future__ import annotations
 
+import re
 import statistics
 from datetime import timedelta
 from typing import Literal, Optional
@@ -122,6 +123,8 @@ class CabinLimit(ApiModel):
     min/max are the threshold values as written (None = no bound on that side);
     window_minutes is set when the limit applies to an average (co2).
     source is the full yaml text; source_label a short form for the screen.
+    name labels the range when it has one ("Comfort zone" = [V2 6013]).
+    health_* is the wider [V2 6012] crew-health limit, display context only (no rule uses it).
     """
 
     min: Optional[float] = None
@@ -130,6 +133,10 @@ class CabinLimit(ApiModel):
     window_minutes: Optional[int] = None
     source: str
     source_label: str
+    name: Optional[str] = None
+    health_min: Optional[float] = None
+    health_max: Optional[float] = None
+    health_source_label: Optional[str] = None
 
 
 class CabinLatest(ApiModel):
@@ -159,9 +166,22 @@ _CABIN_LIMIT_KEYS: dict[str, tuple[Optional[str], Optional[str], Optional[str]]]
     "cabin_temp": ("cabin_temp_min", "cabin_temp_max", None),
     "humidity": ("humidity_min", "humidity_max", None),
 }
+_CABIN_LIMIT_NAMES = {"cabin_temp": "Comfort zone", "humidity": "Comfort zone"}  # [V2 6013]
+# [V2 6012] crew-health limits, shown next to the comfort zone (display only).
+_CABIN_HEALTH_KEYS = {
+    "cabin_temp": ("cabin_temp_health_min", "cabin_temp_health_max"),
+    "humidity": ("humidity_health_min", "humidity_health_max"),
+}
+
 def _source_label(source: str) -> str:
-    """'NASA-STD-3001 Vol. 2 [V2 6004], via …' -> 'NASA-STD-3001'."""
-    return source.split(" Vol.")[0].split(" [")[0].split(",")[0].strip()
+    """'NASA-STD-3001 Vol. 2 Rev D [V2 6013] …, via …' -> 'NASA-STD-3001 [V2 6013]'."""
+    standard = source.split(" Vol.")[0].split(" [")[0].split(",")[0].strip()
+    req = re.search(r"\[V\d+ \d+\]", source)
+    return f"{standard} {req.group(0)}" if req else standard
+
+
+def _sourced_pair(all_t: dict, lo_key: str, hi_key: str) -> bool:
+    return all(k in all_t and all_t[k].value is not None and has_real_source(all_t[k]) for k in (lo_key, hi_key))
 
 
 def _cabin_limit(metric: str) -> Optional[CabinLimit]:
@@ -176,7 +196,13 @@ def _cabin_limit(metric: str) -> Optional[CabinLimit]:
         return None  # a bound without a number or a real source: show no limit at all
     first = next(b for b in bounds if b is not None)
     window = all_t.get(window_key) if window_key else None
+    health = _CABIN_HEALTH_KEYS.get(metric)
+    health_t = (all_t[health[0]], all_t[health[1]]) if health and _sourced_pair(all_t, *health) else None
     return CabinLimit(
+        name=_CABIN_LIMIT_NAMES.get(metric),
+        health_min=float(health_t[0].value) if health_t else None,
+        health_max=float(health_t[1].value) if health_t else None,
+        health_source_label=_source_label(health_t[0].source) if health_t else None,
         min=float(bounds[0].value) if bounds[0] is not None else None,
         max=float(bounds[1].value) if bounds[1] is not None else None,
         unit=first.unit,

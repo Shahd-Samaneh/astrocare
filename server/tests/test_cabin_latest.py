@@ -162,11 +162,15 @@ def test_limits_only_where_thresholds_yaml_has_a_real_source(client):
     co2 = data["co2"]["limit"]
     assert co2["min"] is None and co2["max"] == threshold("co2_max")
     assert co2["windowMinutes"] == threshold("co2_avg_window_minutes")
-    assert co2["source"] == threshold_entry("co2_max").source and co2["sourceLabel"] == "NASA-STD-3001"
+    assert co2["source"] == threshold_entry("co2_max").source and co2["sourceLabel"] == "NASA-STD-3001 [V2 6004]"
+    assert co2["name"] is None and co2["healthMin"] is None
     for m in ("cabin_temp", "humidity"):
         lim = data[m]["limit"]
         assert (lim["min"], lim["max"]) == (threshold(f"{m}_min"), threshold(f"{m}_max"))
-        assert lim["sourceLabel"] == "NASA-STD-3001" and lim["windowMinutes"] is None
+        assert lim["sourceLabel"] == "NASA-STD-3001 [V2 6013]" and lim["windowMinutes"] is None
+        assert lim["name"] == "Comfort zone"
+        assert (lim["healthMin"], lim["healthMax"]) == (threshold(f"{m}_health_min"), threshold(f"{m}_health_max"))
+        assert lim["healthSourceLabel"] == "NASA-STD-3001 [V2 6012]"
     assert data["noise"]["limit"] is None  # team-decision SD multiplier, no sourced number
 
 
@@ -180,3 +184,37 @@ def test_no_limit_when_a_bound_has_no_real_source(client, monkeypatch):
     data = {e["metric"]: e for e in client.get("/api/cabin/latest").json()}
     assert data["humidity"]["limit"] is None
     assert data["cabin_temp"]["limit"] is not None
+
+
+def test_6012_and_6013_entries_trace_to_tb002_rev_b():
+    from server.core.config import thresholds
+
+    t = thresholds()
+    for key in ("cabin_temp_min", "cabin_temp_max", "humidity_min", "humidity_max"):
+        assert "[V2 6013]" in t[key].source and "OCHMO-TB-002 Rev B" in t[key].source and "p. 4 and p. 8" in t[key].source
+        assert "crew-health limit is [V2 6012] 18–27 °C, 25–75 %" in t[key].note
+    health = {"cabin_temp_health_min": 18, "cabin_temp_health_max": 27, "humidity_health_min": 25, "humidity_health_max": 75}
+    for key, value in health.items():
+        assert t[key].value == value and "[V2 6012]" in t[key].source and "OCHMO-TB-002 Rev B" in t[key].source
+
+
+def test_health_limits_are_not_used_by_any_rule():
+    from pathlib import Path
+
+    rules = Path(__file__).resolve().parents[1] / "rules"
+    for py in rules.glob("*.py"):
+        text = py.read_text(encoding="utf-8")
+        assert "_health_min" not in text and "_health_max" not in text, py.name
+
+
+def test_health_limit_hidden_when_it_has_no_real_source(client, monkeypatch):
+    from server.core import config
+    from server.features.monitoring import router
+
+    patched = dict(config.thresholds())
+    patched["humidity_health_max"] = config.Threshold(value=75, unit="%", source="TODO", note="")
+    monkeypatch.setattr(router, "thresholds", lambda: patched)
+    data = {e["metric"]: e for e in client.get("/api/cabin/latest").json()}
+    assert data["humidity"]["limit"]["name"] == "Comfort zone"  # the 6013 range still shows
+    assert data["humidity"]["limit"]["healthMin"] is None and data["humidity"]["limit"]["healthSourceLabel"] is None
+    assert data["cabin_temp"]["limit"]["healthMax"] == 27
