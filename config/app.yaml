@@ -32,6 +32,14 @@ simulator:
   # true = wipe and regenerate simulated data on every server start (handy for demo day).
   reseed_on_start: false
   random_seed: 42
+  # Demo live feed (server/core/live_feed.py): while the server runs, add a simulated HR, SpO2 and
+  # respiration reading every `every_minutes`, inside baseline mean ± `band_sd` SD (quality good),
+  # so these cards don't go stale on stage. Never skin temperature or blood pressure.
+  # Always off under pytest (and with ASTROCARE_NO_LIVE_FEED=1).
+  live_feed:
+    enabled: true
+    every_minutes: 5
+    band_sd: 0.5
 
 ollama:
   url: "http://localhost:11434"

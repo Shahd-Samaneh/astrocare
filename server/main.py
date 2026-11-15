@@ -7,13 +7,14 @@ Everything runs on localhost. The app never calls the internet.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
-from server.core import db
+from server.core import db, live_feed
 from server.core.config import DIST_DIR, app_config
 from server.core.models import AppStatus
 from server.core.seed import seed
@@ -35,7 +36,12 @@ async def lifespan(_: FastAPI):
     if seed(force=reseed):
         log.info("Seeded simulated data")
     run_rules()
+    feed = asyncio.create_task(live_feed.run_forever()) if live_feed.feed_enabled() else None
     yield
+    if feed:
+        feed.cancel()
+        with suppress(asyncio.CancelledError):
+            await feed
 
 
 app = FastAPI(title="AstroCare API", version="0.1.0", lifespan=lifespan)
