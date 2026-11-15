@@ -107,3 +107,10 @@
 .cabinUsual { color: #62d7ad; }
 .cabinOutOfRange { color: #f6bb77; }
 .cabinMissing { color: #aeb7c4; }
+.cabinGuidance { margin: 0 0 8px; font-size: .78rem; line-height: 1.4; }
+.cabinGuidance summary { cursor: pointer; font-weight: 700; color: #f6bb77; }
+.cabinGuidance ol { margin: 6px 0 4px; padding-left: 18px; display: grid; gap: 3px; }
+.cabinResource { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; font-size: .7rem; font-weight: 700; }
+.cabinResourceOk { color: #62d7ad; background: color-mix(in srgb, #62d7ad 14%, transparent); }
+.cabinResourceNo { color: #f6bb77; background: color-mix(in srgb, #f6bb77 14%, transparent); }
+.cabinAlertLink { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: inherit; }

@@ -37,7 +37,7 @@ simulator:
   # so these cards don't go stale on stage. Never skin temperature or blood pressure.
   # Cabin (CO2, temperature, noise, humidity): one reading every `cabin_every_minutes`, close to the
   # latest seeded value (normal noise of `cabin_jitter_sd` x that metric's seeded SD), clamped inside
-  # the thresholds.yaml limits so R-CAB-01 can't fire from the feed.
+  # the thresholds.yaml limits so R-CAB-01 / R-CAB-02 / R-CAB-03 can't fire from the feed.
   # Always off under pytest (and with ASTROCARE_NO_LIVE_FEED=1).
   live_feed:
     enabled: true

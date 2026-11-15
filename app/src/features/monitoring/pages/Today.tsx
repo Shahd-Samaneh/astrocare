@@ -23,6 +23,7 @@ import { SleepSummaryCard, TodayPlanCard } from '../../daily';
 import type {
   Alert,
   CabinMetric,
+  CabinGuidanceStep,
   CabinLatest,
   CabinLimit,
   BodySystem,
@@ -118,6 +119,35 @@ function limitTooltip(limit: CabinLimit): string {
     ? `\nCrew-health limit: ${limit.healthMin}–${limit.healthMax}${unitSuffix(limit.unit)} · ${limit.healthSourceLabel ?? ''}`.trimEnd()
     : '';
   return `Source: ${limit.source}${health}`;
+}
+
+const AVAILABILITY_LABELS: Record<NonNullable<CabinGuidanceStep['availability']>, string> = {
+  available: 'Available',
+  out_of_stock: 'Out of stock',
+  expired: 'Expired',
+  allergy_conflict: 'Allergy conflict',
+};
+
+/** "What to do" list for an unusual cabin value. Steps and resource status come from GET /cabin/latest only. */
+function CabinGuidance({ steps, alertId }: { steps: CabinGuidanceStep[]; alertId: string | null }) {
+  return (
+    <details className={styles.cabinGuidance}>
+      <summary>What to do</summary>
+      <ol>
+        {steps.map((step) => (
+          <li key={step.text} title={`Source: ${step.source}`}>
+            {step.text}
+            {step.resourceId && (
+              <span className={`${styles.cabinResource} ${step.availability === 'available' ? styles.cabinResourceOk : styles.cabinResourceNo}`}>
+                {step.availability ? AVAILABILITY_LABELS[step.availability] : 'Availability not provided'}
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+      {alertId && <Link className={styles.cabinAlertLink} to={`/alerts/${alertId}`}>Open alert <ArrowRight size={13} aria-hidden /></Link>}
+    </details>
+  );
 }
 
 /** Small plot built from actual readings; no sample values are inserted. */
@@ -375,6 +405,7 @@ export default function Today() {
                     </span>
                   )}
                   <span className={`${styles.cabinStatus} ${statusClass}`}>{statusText}</span>
+                  {entry && entry.guidance?.length > 0 && <CabinGuidance steps={entry.guidance} alertId={entry.alertId} />}
                   <span className={styles.cabinMeta}>
                     {entry?.ts ? (
                       <>

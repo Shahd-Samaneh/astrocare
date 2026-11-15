@@ -76,12 +76,14 @@ def test_next_steps_are_operational_and_in_order(client):
         "Confirm with a portable CO₂ reading",
         "Inform the crew member responsible for life support",
         "Move to a better-ventilated module",
-        "Log any symptoms (such as headache) in today's check-in",
+        "Postpone strenuous exercise for now (exercise raises CO₂ output)",
+        "Log any headache in today's check-in",
         "Add this alert to the report",
     ]
-    assert draft.next_steps[3].action.route == "/daily#checkin"
-    assert draft.next_steps[4].action.route == "/reports"
+    assert draft.next_steps[4].action.route == "/daily#checkin"
+    assert draft.next_steps[5].action.route == "/reports"
     joined = " ".join(texts).lower()
     for word in ("medic", "dose", "tablet", "analgesic", "ibuprofen", "paracetamol", "acetaminophen"):
         assert word not in joined
-    assert all(s.resource_id is None for s in draft.next_steps)  # no medicine resource attached
+    # only the portable CO₂ monitor (equipment) is attached; never a medicine
+    assert [s.resource_id for s in draft.next_steps if s.resource_id] == ["eq-co2-monitor"]

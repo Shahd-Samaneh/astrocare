@@ -226,10 +226,16 @@ export interface CabinLimit {
   sourceLabel: string;
   /** Name of the range when it has one, e.g. "Comfort zone" ([V2 6013]). */
   name: string | null;
-  /** Wider [V2 6012] crew-health limit: display context only, no rule uses it. */
+  /** Wider [V2 6012] crew-health limit (R-CAB-02 raises review outside it). */
   healthMin: number | null;
   healthMax: number | null;
   healthSourceLabel: string | null;
+}
+
+/** A "What to do" step on a cabin tile (server cabin_guidance.py), resource-checked like an alert step. */
+export interface CabinGuidanceStep extends NextStep {
+  /** Full citation for the step. */
+  source: string;
 }
 
 export interface CabinLatest {
@@ -243,6 +249,10 @@ export interface CabinLatest {
   stale: boolean;
   /** Only present when thresholds.yaml has a numeric limit with a real source. */
   limit: CabinLimit | null;
+  /** Steps when the value is unusual for this metric; empty when usual. */
+  guidance: CabinGuidanceStep[];
+  /** Open R-CAB-0x alert for this metric, if any. */
+  alertId: string | null;
 }
 
 export interface BodySystem {
