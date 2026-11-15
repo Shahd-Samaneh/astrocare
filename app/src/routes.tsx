@@ -1,5 +1,6 @@
 // All routes. Each SideNav item has a route here (see NAV_GROUPS in shared/components/SideNav.tsx).
 import type { RouteObject } from 'react-router-dom';
+import CrewAlerts from './features/crew/pages/CrewAlerts';
 import AttentionCheck from './features/daily/pages/AttentionCheck';
 import DailyLog from './features/daily/pages/DailyLog';
 import AlertDetail from './features/monitoring/pages/AlertDetail';
@@ -30,6 +31,7 @@ export const pageRoutes: RouteObject[] = [
   { path: 'assistant', element: <Assistant /> },
   { path: 'resources', element: <Resources /> },
   { path: 'reports', element: <Reports /> },
+  { path: 'crew', element: <CrewAlerts /> },
   { path: 'profile', element: <Profile /> },
   {
     path: '*',

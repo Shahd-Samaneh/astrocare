@@ -1,10 +1,11 @@
 // Left navigation. Active state comes from the router (NavLink).
 //   <SideNav alertCount={2} reportCount={1} storageUsedGb={3.4} storageTotalGb={64} />
+//   crewEmergencyCount / crewWatch: Crew alerts red count (unacknowledged emergencies) / yellow dot (open watch).
 // Collapses to an icon-only rail below 900px (labels stay available to screen readers).
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity, Bell, Bone, CalendarDays, Eye, FileText, LayoutGrid, Leaf, Lock, MessageSquare, Package,
-  Radiation, Target, User,
+  Radiation, Siren, Target, User,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { Logo } from './Logo';
@@ -14,7 +15,7 @@ export interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
-  badge?: 'alerts' | 'reports';
+  badge?: 'alerts' | 'reports' | 'crew';
 }
 
 export interface NavGroup {
@@ -53,6 +54,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Support',
     items: [
+      { to: '/crew', label: 'Crew alerts', icon: Siren, badge: 'crew' },
       { to: '/assistant', label: 'Assistant', icon: MessageSquare },
       { to: '/resources', label: 'Resources', icon: Package },
       { to: '/reports', label: 'Reports', icon: FileText, badge: 'reports' },
@@ -64,13 +66,17 @@ export const NAV_GROUPS: NavGroup[] = [
 export interface SideNavProps {
   alertCount?: number;
   reportCount?: number;
+  crewEmergencyCount?: number;
+  crewWatch?: boolean;
   storageUsedGb: number;
   storageTotalGb: number;
 }
 
-export function SideNav({ alertCount = 0, reportCount = 0, storageUsedGb, storageTotalGb }: SideNavProps) {
+export function SideNav({
+  alertCount = 0, reportCount = 0, crewEmergencyCount = 0, crewWatch = false, storageUsedGb, storageTotalGb,
+}: SideNavProps) {
   const pct = storageTotalGb > 0 ? Math.min(100, (storageUsedGb / storageTotalGb) * 100) : 0;
-  const counts = { alerts: alertCount, reports: reportCount };
+  const counts = { alerts: alertCount, reports: reportCount, crew: crewEmergencyCount };
 
   return (
     <nav className={styles.nav} aria-label="Main">
@@ -102,10 +108,13 @@ export function SideNav({ alertCount = 0, reportCount = 0, storageUsedGb, storag
                     >
                       <Icon size={18} aria-hidden />
                       <span className={styles.label}>{item.label}</span>
+                      {item.badge === 'crew' && crewWatch && count === 0 && (
+                        <span className={styles.dotWarn} role="img" aria-label="Watch open" />
+                      )}
                       {count > 0 && (
                         <span
-                          className={`${styles.badge} ${item.badge === 'alerts' ? styles.badgeWarn : styles.badgeChip}`}
-                          aria-label={`${count} ${item.badge === 'alerts' ? 'new alerts' : 'reports pending'}`}
+                          className={`${styles.badge} ${item.badge === 'alerts' ? styles.badgeWarn : item.badge === 'crew' ? styles.badgeDanger : styles.badgeChip}`}
+                          aria-label={`${count} ${item.badge === 'alerts' ? 'new alerts' : item.badge === 'crew' ? 'unacknowledged emergencies' : 'reports pending'}`}
                         >
                           {count}
                         </span>

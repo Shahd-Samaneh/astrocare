@@ -228,3 +228,66 @@ daily:
     unit: days
     source: "Team decision (no published cut-off chosen yet)"
     note: "experimental value. Used by Nadia's R-EX-01."
+
+# Possible loss of consciousness (R-LOC-01, owner: Shahd). See docs/loc-notes.md.
+# No published source gives these numbers for an onboard wearable check, so every value here
+# is an experimental value until the CMO / flight surgeons review it.
+loc:
+  value: null
+  unit: ""
+  source: "Group of LOC thresholds (each key below has its own source)"
+  note: "Nested keys are read by server/features/crew/thresholds.py, not by core/config.thresholds()."
+
+  window_seconds:
+    value: 60
+    unit: s
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. At least min_signals signals must start inside this window, ending now."
+
+  min_signals:
+    value: 2
+    unit: signals
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. Number of the 4 signals (HR change, chest gap, no motion, low SpO2) needed to fire."
+
+  hr_change_pct:
+    value: 30
+    unit: "%"
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. A good-quality HR reading this far above or below the median of the previous hr_median_seconds."
+
+  hr_median_seconds:
+    value: 300
+    unit: s
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. The 'last 5 minutes' the HR median is taken over."
+
+  min_stream_readings:
+    value: 3
+    unit: readings
+    source: "Team decision (data quality), not clinical"
+    note: "experimental value. A sensor must have sent at least this many good readings in the hr_median_seconds before a change or a gap, so the 30-min seeded data and the 5-min live feed never count as a stream that stopped."
+
+  signal_gap_seconds:
+    value: 20
+    unit: s
+    source: "Team decision (data quality), not clinical"
+    note: "experimental value. The chest strap was streaming and then sent nothing for this long."
+
+  no_motion_seconds:
+    value: 30
+    unit: s
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. The wrist sensor showed movement, then only still samples for this long (samples still arriving)."
+
+  motion_min_g:
+    value: 0.05
+    unit: g
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. A wrist motion sample at or above this counts as movement."
+
+  response_seconds:
+    value: 30
+    unit: s
+    source: "Team decision (no published cut-off chosen yet)"
+    note: "experimental value. How long the crew member has to answer \"Are you OK?\" before the CMO and Commander get an emergency."
