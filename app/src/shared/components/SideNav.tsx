@@ -3,7 +3,7 @@
 // Collapses to an icon-only rail below 900px (labels stay available to screen readers).
 import type { LucideIcon } from 'lucide-react';
 import {
-  Activity, Bell, Bone, CalendarDays, FileText, LayoutGrid, Leaf, Lock, MessageSquare, Package,
+  Activity, Bell, Bone, CalendarDays, Eye, FileText, LayoutGrid, Leaf, Lock, MessageSquare, Package,
   Radiation, Target, User,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
@@ -47,6 +47,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/radiation', label: 'Radiation', icon: Radiation },
       { to: '/bone', label: 'Bone & muscle', icon: Bone },
+      { to: '/vision', label: 'Vision check', icon: Eye },
     ],
   },
   {

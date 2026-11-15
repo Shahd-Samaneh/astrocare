@@ -62,7 +62,7 @@ def generate(now: datetime) -> dict[str, list[dict[str, Any]]]:
     out: dict[str, list[dict[str, Any]]] = {k: [] for k in (
         "readings", "cabin_readings", "sensors", "profiles", "sleep_sessions", "cognitive_tests",
         "checkins", "exercise_plans", "exercise_logs", "resources", "relax_sessions", "reports",
-        "action_log",
+        "action_log", "vision_checks",
     )}
 
     def quality() -> str:
@@ -221,6 +221,13 @@ def generate(now: datetime) -> dict[str, list[dict[str, Any]]]:
             "audio_mode": ["nature", "music", "nature"][k], "duration_min": [10, 15, 10][k],
             "stress_before": [3, 3, 4][k], "stress_after": [2, 2, 3][k],
         })
+    # ---- vision self-check: a baseline (day 130) and a repeat (day 137), both "no change" ------
+    # No rng here, so adding these rows leaves every other simulated value unchanged.
+    out["vision_checks"] = [
+        {"id": f"vis-{d}", "ts": iso(day_start(d) + timedelta(hours=8, minutes=15)), "eye": "both",
+         "near_vision_smallest_line": 8, "amsler_changed": False, "notes": None, "source": "simulated"}
+        for d in (130, 137)
+    ]
     # past reports are already sent, so the outbox starts empty after a reseed
     out["reports"] = [
         {"id": "rep-135", "created_ts": iso(day_start(135) + timedelta(hours=18)), "status": "sent",

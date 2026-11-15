@@ -1,0 +1,20 @@
+title: Measurements of Energetic Particle Radiation in Transit to Mars on the Mars Science Laboratory (Zeitlin et al., Science, 31 May 2013; NASA/JPL release 30 May 2013)
+url: https://doi.org/10.1126/science.1235989
+id: nasa-msl-rad-cruise
+
+Summary written by the AstroCare team in our own words (not copied text). Sources: Zeitlin et al.,
+Science 340(6136), 31 May 2013, the NASA/JPL news release of 30 May 2013 on the same result,
+and the AAAS/Science summary of 30 May 2013.
+
+- The Radiation Assessment Detector (RAD) on NASA's Mars Science Laboratory (Curiosity) measured
+  radiation during the 2011-2012 cruise from Earth to Mars.
+- Averaged over the cruise, the dose equivalent was about 1.8 mSv per day.
+- RAD was inside the spacecraft during cruise, so this rate already includes that vehicle's
+  shielding. A different vehicle, or a different point in the solar cycle, would give a different rate.
+- Most of the cruise dose came from galactic cosmic rays. Solar particle events added about 5% of
+  the total.
+- The measurements represent low-to-moderate solar activity (AAAS/Science summary, 30 May 2013).
+
+How AstroCare uses it: as a simulated daily rate for a deep-space transit mission
+(config/thresholds.yaml: radiation_deep_space_rate_msv_per_day). It is an estimate, not a
+dosimeter reading.

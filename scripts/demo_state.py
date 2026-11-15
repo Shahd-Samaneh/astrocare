@@ -14,7 +14,8 @@ written and Ollama is not needed). Run scripts/demo_check.py too for the assista
   7. the Relax media files are present and served
   8. heart rate, SpO2 and respiration are still fresh (they go stale 2 h after a reseed)
   9. cabin CO2 / temperature / noise / humidity are fresh (same stale rule as the vitals)
- 10. the live feed is running (needs the server: npm run start / npm run dev), see
+ 10. vision self-check: the 2 seeded checks (days 130, 137), "Same as baseline", no R-VIS-01
+ 11. the live feed is running (needs the server: npm run start / npm run dev), see
      server/core/live_feed.py
 
 Exit code 0 when every check passed, 1 otherwise.
@@ -144,6 +145,17 @@ def run_state_checks(log: Callable[[str], None] = print) -> list[tuple[str, bool
 
     check("HR / SpO2 / resp still fresh", fresh_vitals)
     check("Cabin readings fresh", fresh_cabin)
+
+    def vision() -> tuple[bool, str]:
+        checks = get("/api/vision/checks?n=10")
+        s = get("/api/vision/summary")
+        vis_alerts = [a for a in get("/api/alerts") if a["ruleId"] == "R-VIS-01" and a["status"] != "closed"]
+        ids = sorted(ch["id"] for ch in checks)
+        ok = ids == ["vis-130", "vis-137"] and s["status"] == "stable" and not vis_alerts
+        return ok, f"{len(checks)} check(s) {ids}, {s['result']}, {len(vis_alerts)} open R-VIS-01" + (
+            "" if ok else "  (run npm run reseed)")
+
+    check("Vision self-check seeded, no change", vision)
     check("Live feed running", feed)
     return results
 

@@ -16,12 +16,16 @@ from server.core import db
 from server.core.config import has_real_source, iso, parse_ts, threshold, thresholds, utcnow
 from server.core.models import (
     CABIN_METRICS, METRICS, Alert, AlertStatus, ApiModel, CabinMetric, CabinReading, Metric, Profile,
-    Quality, Reading, Resource, Sensor,
+    Quality, Reading, Resource, Sensor, Source,
 )
 from server.core.simulator import UNITS
 from server.core.status import mission_clock, mission_day_start
 
+from . import vision
+from .vision import router as vision_router
+
 router = APIRouter(tags=["monitoring"])
+router.include_router(vision_router)  # /vision/checks, /vision/summary
 
 
 @router.get("/profile")
@@ -309,12 +313,95 @@ _NO_MEASUREMENTS = "No connected measurements"
 
 
 class BodySystem(ApiModel):
-    """A Today-screen tile for one physiological system."""
+    """A Today-screen tile for one physiological system.
+
+    status_label: short qualifier shown after the status ("within limit"); None for most tiles.
+    simulated: the tile's value is a simulated estimate (radiation), not a measurement.
+    Vision has no sensor: its tile reflects the crew's self-check (server/features/monitoring/vision.py).
+    """
 
     id: str
     status: BodySystemStatus
     text: str
     alert_id: Optional[str] = None
+    status_label: Optional[str] = None
+    simulated: bool = False
+
+
+# ---- Radiation estimate -----------------------------------------------------
+# No dosimeter is connected. The dose is estimated as mission day × a NASA-measured deep-space
+# rate (MSL RAD cruise). Both numbers come from thresholds.yaml with a real source; without them
+# the estimate is unavailable (no fallback numbers).
+RADIATION_LABEL = "Estimate · simulated · MSL RAD rate"
+RADIATION_NOTE = "No dosimeter connected; this is an estimate from a NASA-measured deep-space rate."
+RADIATION_SCOPE_NOTE = "This mission only: dose from earlier missions is not included."
+ISS_NEUTRON_COMPARISON = "For comparison: on the ISS, neutrons are about 30% of the dose (CSA, CANS)"
+ISS_NEUTRON_SOURCE = "Canadian Space Agency, Monitoring radiation for astronaut health, 2026 (references/csa-radiation-monitoring.txt)"
+_RAD_LIMIT_KEY = "radiation_career_limit_msv"
+_RAD_RATE_KEY = "radiation_deep_space_rate_msv_per_day"
+
+
+class RadiationEstimate(ApiModel):
+    """Cumulative dose estimate for GET /radiation/estimate (and the Today tile, and the report).
+
+    cumulative_msv and pct_of_limit are rounded to whole numbers (the rate has two significant
+    figures). within_limit compares with the sourced career limit ("shall be less than 600 mSv").
+    """
+
+    available: bool
+    mission_day: int
+    rate_msv_per_day: Optional[float] = None
+    cumulative_msv: Optional[int] = None
+    career_limit_msv: Optional[float] = None
+    pct_of_limit: Optional[int] = None
+    within_limit: Optional[bool] = None
+    label: str = RADIATION_LABEL
+    source: Source = "simulated"
+    rate_source: Optional[str] = None
+    rate_source_label: Optional[str] = None
+    limit_source: Optional[str] = None
+    limit_source_label: Optional[str] = None
+    note: str = RADIATION_NOTE
+    scope_note: str = RADIATION_SCOPE_NOTE
+    comparison: str = ISS_NEUTRON_COMPARISON
+    comparison_source: str = ISS_NEUTRON_SOURCE
+
+
+def _half_up(x: float) -> int:
+    return int(x + 0.5)  # x >= 0 here; avoids round()'s half-to-even
+
+
+def radiation_estimate(mission_day: Optional[int] = None) -> RadiationEstimate:
+    day = mission_clock()[1] if mission_day is None else mission_day
+    all_t = thresholds()
+    limit_t, rate_t = all_t.get(_RAD_LIMIT_KEY), all_t.get(_RAD_RATE_KEY)
+    if any(t is None or t.value is None or not has_real_source(t) for t in (limit_t, rate_t)):
+        return RadiationEstimate(available=False, mission_day=day)
+    limit, rate = float(limit_t.value), float(rate_t.value)
+    dose = max(day, 0) * rate
+    return RadiationEstimate(
+        available=True, mission_day=day, rate_msv_per_day=rate,
+        cumulative_msv=_half_up(dose), career_limit_msv=limit, pct_of_limit=_half_up(dose / limit * 100),
+        within_limit=dose < limit,
+        rate_source=rate_t.source, rate_source_label=_source_label(rate_t.source),
+        limit_source=limit_t.source, limit_source_label=_source_label(limit_t.source),
+    )
+
+
+def _radiation(day: int) -> tuple[BodySystemStatus, str, Optional[str]]:
+    est = radiation_estimate(day)
+    if not est.available:
+        return "no_data", _NO_MEASUREMENTS, None
+    text = f"{est.cumulative_msv} mSv · {est.pct_of_limit}% of career limit (estimate)"
+    if est.within_limit:
+        return "stable", text, "within limit"
+    # The sourced limit itself, not an invented review fraction.
+    return "review", text, "at or above career limit"
+
+
+@router.get("/radiation/estimate")
+def get_radiation_estimate() -> RadiationEstimate:
+    return radiation_estimate()
 
 
 def _profile() -> Optional[Profile]:
@@ -423,14 +510,21 @@ def body_systems() -> list[BodySystem]:
         "sleep": _sleep(),
         "cognition": _cognition(profile),
         "bone_muscle": _bone_muscle(today),
-        "radiation": ("no_data", _NO_MEASUREMENTS),
-        "vision": ("no_data", _NO_MEASUREMENTS),
         "thermoregulation": _thermoregulation(profile, now, sensors),
     }
+    rad_status, rad_text, rad_label = _radiation(today)
+    computed["radiation"] = (rad_status, rad_text)
+    vis_status, vis_text, vis_label = vision.body_system_tile(now)
+    computed["vision"] = (vis_status, vis_text)
 
     out: list[BodySystem] = []
     for system in BODY_SYSTEMS:
         status, text = computed[system]
+        extra: dict = {}
+        if system == "radiation":
+            extra = {"status_label": rad_label, "simulated": rad_status != "no_data"}
+        elif system == "vision":
+            extra = {"status_label": vis_label}
         alert_id = None
         alert = next((a for a in open_alerts if a.rule_id.startswith(SYSTEM_RULE_PREFIXES[system])), None)
         if alert is not None:
@@ -438,7 +532,8 @@ def body_systems() -> list[BodySystem]:
                 alert_id = alert.id  # R-DATA-* explains no_data; it never forces review
             else:
                 status, alert_id = "review", alert.id
-        out.append(BodySystem(id=system, status=status, text=text, alert_id=alert_id))
+                extra.pop("status_label", None)  # "within limit" would contradict the alert
+        out.append(BodySystem(id=system, status=status, text=text, alert_id=alert_id, **extra))
     return out
 
 

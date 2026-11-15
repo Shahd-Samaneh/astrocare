@@ -72,6 +72,11 @@ TABLES: dict[str, dict[str, str]] = {
         "id": "TEXT PRIMARY KEY", "ts": "TEXT", "scene_id": "TEXT", "audio_mode": "TEXT",
         "duration_min": "INTEGER", "stress_before": "INTEGER", "stress_after": "INTEGER",
     },
+    # Vision self-check (no sensor): near-vision card line + Amsler grid answer, per eye.
+    "vision_checks": {
+        "id": "TEXT PRIMARY KEY", "ts": "TEXT", "eye": "TEXT", "near_vision_smallest_line": "INTEGER",
+        "amsler_changed": "BOOL", "notes": "TEXT", "source": "TEXT",
+    },
     "reports": {
         "id": "TEXT PRIMARY KEY", "created_ts": "TEXT", "status": "TEXT", "sections": "JSON",
         "file_path": "TEXT",
@@ -87,6 +92,7 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS ix_readings_metric_ts ON readings(metric, ts)",
     "CREATE INDEX IF NOT EXISTS ix_cabin_metric_ts ON cabin_readings(metric, ts)",
     "CREATE INDEX IF NOT EXISTS ix_alerts_status ON alerts(status)",
+    "CREATE INDEX IF NOT EXISTS ix_vision_checks_ts ON vision_checks(ts)",
 ]
 
 
