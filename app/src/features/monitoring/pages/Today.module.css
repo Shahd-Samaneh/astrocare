@@ -97,6 +97,10 @@
 .systemArrow { flex-shrink: 0; opacity: .7; align-self: center; }
 .systemStatus { display: inline-flex; margin-top: 9px; font-size: .72rem; font-weight: 700; letter-spacing: .02em; }
 .systemTile .systemReason { display: block; margin-top: 4px; font-size: .72rem; line-height: 1.35; opacity: .75; }
+/* Stale/missing skin temperature: the last value stays visible but dimmed (as stale vital cards). */
+.systemTile small.systemDimmed { opacity: .5; }
+.systemActions { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 7px; font-size: .76rem; font-weight: 700; }
+.systemActions a { color: inherit; text-decoration: underline; }
 .systemStable { border-inline-start: 3px solid #35b88b; }
 .systemStable .systemStatus { color: #62d7ad; }
 .systemReview { border-inline-start: 3px solid #efad5d; }

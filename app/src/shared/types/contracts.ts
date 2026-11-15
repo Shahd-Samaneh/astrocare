@@ -266,6 +266,23 @@ export interface BodySystem {
   simulated?: boolean;
   /** One line under the status: why the system is tracked this way (bone & muscle). */
   reason?: string | null;
+  /** Thermoregulation tile only. */
+  thermo?: ThermoDetail | null;
+}
+
+/** Extra lines for the thermoregulation tile (GET /body-systems). */
+export interface ThermoDetail {
+  /** Status word to show: "Stable", "Review", "Sensor disconnected" or "No data". */
+  statusText: string;
+  /** Latest skin temperature is within stale_minutes; when false the value is dimmed. */
+  fresh: boolean;
+  lastTs: string | null;
+  /** POST /readings/manual accepts skin_temp. */
+  manualEntry: boolean;
+  /** "Cabin 22.5 °C · comfort zone 20–25 °C (NASA-STD-3001 [V2 6013])". */
+  cabin: string | null;
+  /** Full source of the cabin limit (tooltip). */
+  cabinSource: string | null;
 }
 
 /** GET /bone/estimate: months in flight × NASA's average bone loss per month. Illustrative only. */

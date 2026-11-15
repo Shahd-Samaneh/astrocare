@@ -4,7 +4,7 @@
  * Data quality is kept separate from clinical interpretation.
  */
 import { useMemo, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Activity, ArrowLeft, ArrowRight, Clock3, PenLine, RefreshCw } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from 'recharts';
 import { api, useApi } from '../../../shared/api/client';
@@ -89,14 +89,23 @@ function BaselineSummary({ baseline, unit }: { baseline: Baseline | undefined; u
   );
 }
 
+/** Metrics with a manual-entry form here, both saved through POST /readings/manual. */
+type ManualKind = 'bp' | 'skin_temp';
+
 export default function Vitals() {
   const t = useChartTheme();
   const { status } = useAppStatus();
-  const [metric, setMetric] = useState<Metric>('heart_rate');
+  // Deep link from the Today thermoregulation tile: /vitals?metric=skin_temp(&manual=1).
+  const [params] = useSearchParams();
+  const linkedMetric = METRICS.find((entry) => entry.id === params.get('metric'))?.id;
+  const [metric, setMetric] = useState<Metric>(linkedMetric ?? 'heart_rate');
   const [period, setPeriod] = useState<Period>('7d');
-  const [manualOpen, setManualOpen] = useState(false);
+  const [manual, setManual] = useState<ManualKind | null>(
+    linkedMetric === 'skin_temp' && params.get('manual') === '1' ? 'skin_temp' : null);
+  const manualKind: ManualKind = metric === 'skin_temp' ? 'skin_temp' : 'bp';
   const [sys, setSys] = useState('');
   const [dia, setDia] = useState('');
+  const [skin, setSkin] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
@@ -145,7 +154,7 @@ export default function Vitals() {
       setFormSuccess(`Saved manual blood pressure: ${systolic}/${diastolic} mmHg.`);
       setSys('');
       setDia('');
-      setManualOpen(false);
+      setManual(null);
       setMetric('bp_sys');
       readingsRequest.reload();
     } catch (error) {
@@ -154,6 +163,31 @@ export default function Vitals() {
         ? `Systolic was saved, but diastolic failed (${reason}). Check stored readings before retrying to avoid duplicates.`
         : `Could not save blood pressure (${reason}).`);
       readingsRequest.reload();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function submitSkinTemp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (saving) return;
+    setFormError(null);
+    setFormSuccess(null);
+    const value = Number(skin);
+    if (!skin.trim() || !Number.isFinite(value) || value <= 0) {
+      setFormError('Enter the measured skin temperature as a positive number in °C.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.post<Reading>('/readings/manual', { metric: 'skin_temp', value });
+      setFormSuccess(`Saved manual skin temperature: ${value} °C.`);
+      setSkin('');
+      setManual(null);
+      setMetric('skin_temp');
+      readingsRequest.reload();
+    } catch (error) {
+      setFormError(`Could not save skin temperature (${error instanceof Error ? error.message : 'Unknown error'}).`);
     } finally {
       setSaving(false);
     }
@@ -168,13 +202,27 @@ export default function Vitals() {
           <h1>Vitals detail</h1>
           <p className={styles.muted}>Explore local measurements, data quality, and personal baseline trends.</p>
         </div>
-        <button type="button" className={styles.primaryAction} onClick={() => { setManualOpen((open) => !open); setFormError(null); setFormSuccess(null); }}>
-          <PenLine size={17} /> {manualOpen ? 'Close manual entry' : 'Enter blood pressure'}
+        <button type="button" className={styles.primaryAction} onClick={() => { setManual((open) => (open ? null : manualKind)); setFormError(null); setFormSuccess(null); }}>
+          <PenLine size={17} /> {manual ? 'Close manual entry' : manualKind === 'skin_temp' ? 'Enter skin temperature' : 'Enter blood pressure'}
         </button>
       </header>
 
       {formSuccess && <div role="status" className={styles.success}>{formSuccess}</div>}
-      {manualOpen && (
+      {manual === 'skin_temp' && (
+        <Card title="Manual skin temperature reading" subtitle="Use when the patch is disconnected. Stored in the local database as a manual reading.">
+          <form onSubmit={submitSkinTemp} className={styles.manualForm}>
+            <div className={styles.manualFields}>
+              <label>Skin temperature (°C)
+                <input type="number" required min="0" step="0.1" value={skin} onChange={(e) => setSkin(e.target.value)} placeholder="°C" />
+              </label>
+              <button type="submit" disabled={saving} className={styles.primaryAction}>{saving ? 'Saving…' : 'Save reading'}</button>
+            </div>
+            {formError && <p className={styles.error} role="alert">{formError}</p>}
+            <p className={styles.disclaimer}>Manual entry is for recorded measurements only. AstroCare does not diagnose or prescribe treatment.</p>
+          </form>
+        </Card>
+      )}
+      {manual === 'bp' && (
         <Card title="Manual blood pressure reading" subtitle="Systolic and diastolic values are stored in the local database as separate readings.">
           <form onSubmit={submitBloodPressure} className={styles.manualForm}>
             <div className={styles.manualFields}>

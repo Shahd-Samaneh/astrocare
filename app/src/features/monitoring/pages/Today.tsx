@@ -298,19 +298,35 @@ export default function Today() {
               const entry = systemsError ? undefined : bodySystems?.find((system) => system.id === id);
               const stateClass = entry?.status === 'stable' ? styles.systemStable
                 : entry?.status === 'review' ? styles.systemReview : styles.systemNoData;
-              const href = entry && to && pageFirst ? to
+              const thermo = entry?.thermo;
+              // Thermoregulation carries its own action links, so the tile itself is not a link.
+              const href = thermo ? undefined : entry && to && pageFirst ? to
                 : entry?.alertId ? `/alerts/${encodeURIComponent(entry.alertId)}` : entry && to ? to : undefined;
               const content = (
                 <>
                   <Icon size={23} aria-hidden />
                   <span className={styles.systemDetails}>
                     <strong>{label}{entry?.simulated && <> <SimulatedBadge /></>}</strong>
-                    <small>{entry?.text ?? (systemsLoading ? 'Loading…' : 'Status unavailable')}</small>
+                    <small className={thermo && !thermo.fresh ? styles.systemDimmed : undefined}>
+                      {entry?.text ?? (systemsLoading ? 'Loading…' : 'Status unavailable')}
+                    </small>
                     <span className={styles.systemStatus}>
-                      {entry ? BODY_STATUS_LABELS[entry.status] : 'Unavailable'}
+                      {thermo ? thermo.statusText : entry ? BODY_STATUS_LABELS[entry.status] : 'Unavailable'}
                       {entry?.statusLabel && ` · ${entry.statusLabel}`}
                     </span>
                     {entry?.reason && <small className={styles.systemReason}>{entry.reason}</small>}
+                    {thermo?.cabin && (
+                      <small className={styles.systemReason} title={thermo.cabinSource ? `Source: ${thermo.cabinSource}` : undefined}>
+                        {thermo.cabin}
+                      </small>
+                    )}
+                    {thermo && !thermo.fresh && (
+                      <span className={styles.systemActions}>
+                        <Link to="/vitals?metric=skin_temp">Check the patch</Link>
+                        {thermo.manualEntry && <Link to="/vitals?metric=skin_temp&manual=1">Enter manually</Link>}
+                        {entry?.alertId && <Link to={`/alerts/${encodeURIComponent(entry.alertId)}`}>Open alert</Link>}
+                      </span>
+                    )}
                   </span>
                   {href && <ArrowRight size={15} className={styles.systemArrow} aria-hidden />}
                 </>

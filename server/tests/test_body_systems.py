@@ -67,9 +67,67 @@ def test_vision_tile_reflects_the_seeded_self_check(client):
 
 def test_no_data_systems(client):
     s = _systems(client)
-    # skin patch is disconnected in the seed -> no_data with the sensor status
-    assert s["thermoregulation"]["status"] == "no_data"
-    assert "disconnected" in s["thermoregulation"]["text"]
+    # skin patch is disconnected in the seed -> no_data, last value with its age, never "Stable"
+    t = s["thermoregulation"]
+    assert t["status"] == "no_data"
+    assert t["text"] == "Last: 33.9 °C · 6 h ago"
+    assert t["thermo"]["statusText"] == "Sensor disconnected"
+    assert t["thermo"]["fresh"] is False and t["thermo"]["lastTs"]
+
+
+def test_thermoregulation_cabin_context_uses_sourced_comfort_zone(client):
+    thermo = _systems(client)["thermoregulation"]["thermo"]
+    cabin_temp = next(e for e in client.get("/api/cabin/latest").json() if e["metric"] == "cabin_temp")
+    limit = cabin_temp["limit"]  # same limit object the cabin tile shows
+    assert thermo["cabin"] == (
+        f"Cabin {round(cabin_temp['value'], 1):g} °C · comfort zone {limit['min']:g}–{limit['max']:g} °C "
+        f"({limit['sourceLabel']})"
+    )
+    assert limit["sourceLabel"] == "NASA-STD-3001 [V2 6013]"
+    assert thermo["cabinSource"] == limit["source"]
+
+
+def test_thermoregulation_manual_entry_supported(client):
+    assert _systems(client)["thermoregulation"]["thermo"]["manualEntry"] is True
+
+
+def _with_skin_reading(client, value: float, quality: str = "good") -> dict:
+    """Insert a fresh skin_temp reading, return the tile, then remove the reading again."""
+    from server.core.config import iso, utcnow
+    db.insert("readings", {
+        "id": "r-skin-test", "astronaut_id": "c2", "metric": "skin_temp", "value": value,
+        "unit": "°C", "ts": iso(utcnow()), "source": "manual", "quality": quality,
+    })
+    try:
+        return _systems(client)["thermoregulation"]
+    finally:
+        with db.connect() as conn:
+            conn.execute("DELETE FROM readings WHERE id = ?", ("r-skin-test",))
+
+
+def _skin_baseline(client) -> dict:
+    return client.get("/api/profile").json()["baseline"]["skin_temp"]
+
+
+def test_thermoregulation_fresh_good_in_baseline_is_stable(client):
+    t = _with_skin_reading(client, _skin_baseline(client)["mean"])
+    assert t["status"] == "stable" and t["thermo"]["statusText"] == "Stable"
+    assert t["thermo"]["fresh"] is True and t["text"].endswith("in baseline")
+
+
+def test_thermoregulation_fresh_outside_baseline_is_review(client):
+    b = _skin_baseline(client)
+    t = _with_skin_reading(client, b["mean"] + 10 * b["sd"] + 1)
+    assert t["status"] == "review" and t["thermo"]["statusText"] == "Review"
+
+
+def test_thermoregulation_fresh_low_quality_is_not_stable(client):
+    t = _with_skin_reading(client, _skin_baseline(client)["mean"], quality="low")
+    assert t["status"] == "no_data" and t["thermo"]["statusText"] == "No data"
+
+
+def test_thermoregulation_back_to_stale_after_test_reading(client):
+    assert _systems(client)["thermoregulation"]["thermo"]["statusText"] == "Sensor disconnected"
 
 
 def test_thermoregulation_links_rdata_alert_but_stays_no_data(client):
