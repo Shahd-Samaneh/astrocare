@@ -13,7 +13,8 @@ written and Ollama is not needed). Run scripts/demo_check.py too for the assista
   6. assistant permissions are at their defaults
   7. the Relax media files are present and served
   8. heart rate, SpO2 and respiration are still fresh (they go stale 2 h after a reseed)
-  9. the live feed is running (needs the server: npm run start / npm run dev), see
+  9. cabin CO2 / temperature / noise / humidity are fresh (same stale rule as the vitals)
+ 10. the live feed is running (needs the server: npm run start / npm run dev), see
      server/core/live_feed.py
 
 Exit code 0 when every check passed, 1 otherwise.
@@ -106,6 +107,16 @@ def run_state_checks(log: Callable[[str], None] = print) -> list[tuple[str, bool
         ok = all(q in ("good", "low") for q in qs.values())
         return ok, ", ".join(f"{m} {q}" for m, q in qs.items()) + ("" if ok else "  (reseed: data is > 2 h old)")
 
+    def fresh_cabin() -> tuple[bool, str]:
+        entries = get("/api/cabin/latest")
+        bad = [e for e in entries if e["status"] == "missing" or e.get("stale")]
+        detail = ", ".join(
+            f"{e['metric']} {'missing' if e['status'] == 'missing' else ('stale' if e.get('stale') else 'fresh')}"
+            + (f" ({e['ageMinutes']} min)" if e.get("ageMinutes") is not None else "")
+            for e in entries
+        )
+        return not bad, detail + ("" if not bad else "  (start the server for the live feed, or reseed)")
+
     check("Mission day 142", mission_day)
     check("R-FAT-01 open at review, check-in missing", fatigue)
     check("Skin temperature stale", skin_stale)
@@ -124,11 +135,15 @@ def run_state_checks(log: Callable[[str], None] = print) -> list[tuple[str, bool
         age_s = (utcnow() - parse_ts(beat)).total_seconds()
         if age_s > 180:
             return False, f"last tick {age_s / 60:.0f} min ago: is the server running?"
-        live = db.query("readings", "id LIKE 'live-%'", order_by="ts DESC", limit=1)
-        last = f"; last live reading {(utcnow() - parse_ts(live[0]['ts'])).total_seconds() / 60:.0f} min ago" if live else ""
-        return True, f"tick {age_s:.0f} s ago, every {live_feed.settings()['every_minutes']:g} min{last}"
+        def ago(table: str) -> str:
+            live = db.query(table, "id LIKE 'live-%'", order_by="ts DESC", limit=1)
+            return f"{(utcnow() - parse_ts(live[0]['ts'])).total_seconds() / 60:.0f} min ago" if live else "none yet"
+        cfg = live_feed.settings()
+        return True, (f"tick {age_s:.0f} s ago; vitals every {cfg['every_minutes']:g} min (last {ago('readings')}), "
+                      f"cabin every {cfg['cabin_every_minutes']:g} min (last {ago('cabin_readings')})")
 
     check("HR / SpO2 / resp still fresh", fresh_vitals)
+    check("Cabin readings fresh", fresh_cabin)
     check("Live feed running", feed)
     return results
 

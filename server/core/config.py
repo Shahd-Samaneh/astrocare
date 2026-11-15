@@ -62,6 +62,15 @@ def thresholds() -> dict[str, Threshold]:
     }
 
 
+# A source only counts as "real" when it cites a published reference, not a TODO/team/trial value.
+_UNSOURCED_PREFIXES = ("todo", "team decision", "experimental", "trial")
+
+
+def has_real_source(entry: Threshold) -> bool:
+    source = entry.source.strip()
+    return bool(source) and not source.lower().startswith(_UNSOURCED_PREFIXES)
+
+
 def threshold_entry(name: str) -> Threshold:
     return thresholds()[name]
 

@@ -48,7 +48,6 @@ def test_average_above_limit_fires(client):
         assert draft.level == "review"
         assert draft.dedupe_key == "cab-co2-high"
         assert len(draft.data_used) >= 2
-        assert any(s.locked_for_cmo for s in draft.next_steps)  # CMO step for symptoms
         assert "cause" not in draft.what_changed.lower()
 
 
@@ -67,3 +66,22 @@ def test_one_high_reading_but_average_below_does_not_fire(client):
 def test_no_co2_readings_does_not_fire(client):
     with _only_co2([]):
         assert CabinCo2Rule().evaluate(RuleContext()) is None
+
+
+def test_next_steps_are_operational_and_in_order(client):
+    with _only_co2([_co2(4.0, 10), _co2(5.0, 20)]):
+        draft = CabinCo2Rule().evaluate(RuleContext())
+    texts = [s.text for s in draft.next_steps]
+    assert texts == [
+        "Confirm with a portable CO₂ reading",
+        "Inform the crew member responsible for life support",
+        "Move to a better-ventilated module",
+        "Log any symptoms (such as headache) in today's check-in",
+        "Add this alert to the report",
+    ]
+    assert draft.next_steps[3].action.route == "/daily#checkin"
+    assert draft.next_steps[4].action.route == "/reports"
+    joined = " ".join(texts).lower()
+    for word in ("medic", "dose", "tablet", "analgesic", "ibuprofen", "paracetamol", "acetaminophen"):
+        assert word not in joined
+    assert all(s.resource_id is None for s in draft.next_steps)  # no medicine resource attached

@@ -64,6 +64,18 @@ co2_avg_window_minutes:
   source: "NASA-STD-3001 Vol. 2 [V2 6004] (1-hour average)"
   note: "Window over which cabin co2 is averaged before comparing with co2_max."
 
+co2_headache_avg_max:
+  value: 2.5
+  unit: mmHg
+  source: "NASA OCHMO Technical Brief TB-004 Carbon Dioxide (p. 5), citing Law et al. 2014, J Occup Environ Med 56(5):477-483"
+  note: "To keep the risk of headache below 1 %, the 7-day average CO2 needs to stay below 2.5 mmHg. Only adds a possible factor to R-FAT-01 / R-SLP-01; never fires an alert on its own. https://www.nasa.gov/wp-content/uploads/2023/12/ochmo-tb-004-carbon-dioxide.pdf"
+
+co2_headache_avg_days:
+  value: 7
+  unit: d
+  source: "NASA OCHMO Technical Brief TB-004 Carbon Dioxide (p. 5, 7-day average)"
+  note: "Window over which cabin co2 is averaged before comparing with co2_headache_avg_max."
+
 cabin_temp_min:
   value: 20
   unit: "°C"

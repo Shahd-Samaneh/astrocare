@@ -138,3 +138,45 @@ def test_noise_uses_baseline_mean_and_sd(client):
 
         db.insert("cabin_readings", _reading("noise", 10.0, now + timedelta(minutes=2)))
         assert _entry(client, "noise")["status"] == "below_usual"
+
+
+def test_stale_uses_the_vitals_rule(client):
+    from server.core.config import threshold
+
+    now = utcnow()
+    stale_min = float(threshold("stale_minutes"))
+    with _isolated_metric("humidity"):
+        db.insert("cabin_readings", _reading("humidity", 45.0, now - timedelta(minutes=stale_min - 1)))
+        e = _entry(client, "humidity")
+        assert e["stale"] is False and e["ageMinutes"] in (int(stale_min) - 1, int(stale_min))
+        _delete("humidity")
+        db.insert("cabin_readings", _reading("humidity", 45.0, now - timedelta(minutes=stale_min + 5)))
+        e = _entry(client, "humidity")
+        assert e["stale"] is True and e["status"] == "usual"  # stale is separate from the range status
+
+
+def test_limits_only_where_thresholds_yaml_has_a_real_source(client):
+    from server.core.config import threshold, threshold_entry
+
+    data = {e["metric"]: e for e in client.get("/api/cabin/latest").json()}
+    co2 = data["co2"]["limit"]
+    assert co2["min"] is None and co2["max"] == threshold("co2_max")
+    assert co2["windowMinutes"] == threshold("co2_avg_window_minutes")
+    assert co2["source"] == threshold_entry("co2_max").source and co2["sourceLabel"] == "NASA-STD-3001"
+    for m in ("cabin_temp", "humidity"):
+        lim = data[m]["limit"]
+        assert (lim["min"], lim["max"]) == (threshold(f"{m}_min"), threshold(f"{m}_max"))
+        assert lim["sourceLabel"] == "NASA-STD-3001" and lim["windowMinutes"] is None
+    assert data["noise"]["limit"] is None  # team-decision SD multiplier, no sourced number
+
+
+def test_no_limit_when_a_bound_has_no_real_source(client, monkeypatch):
+    from server.core import config
+    from server.features.monitoring import router
+
+    patched = dict(config.thresholds())
+    patched["humidity_max"] = config.Threshold(value=60, unit="%", source="TODO", note="")
+    monkeypatch.setattr(router, "thresholds", lambda: patched)
+    data = {e["metric"]: e for e in client.get("/api/cabin/latest").json()}
+    assert data["humidity"]["limit"] is None
+    assert data["cabin_temp"]["limit"] is not None

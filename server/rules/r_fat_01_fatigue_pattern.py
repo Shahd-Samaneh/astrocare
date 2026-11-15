@@ -9,6 +9,8 @@ Baseline = median of the `daily.attention_baseline_n` routine tests before the
 last 48 h (server/features/daily/attention_stats.py, shared with GET /api/tests/baseline).
 
 Level: review. Never names a cause: every factor is "possible, not confirmed".
+Cabin CO₂ / temperature / humidity that crossed a sourced threshold in the alert's window is
+added as a possible factor (rules/cabin_factors.py).
 
 The engine creates the alert. The in-place update, the retest → recheck step and
 the alert id inside the retest route are applied by
@@ -18,6 +20,8 @@ from __future__ import annotations
 
 import statistics
 
+from datetime import timedelta
+
 from server.core.config import parse_ts
 from server.core.status import mission_day_start
 from server.features.daily.attention_stats import (
@@ -26,6 +30,7 @@ from server.features.daily.attention_stats import (
 from server.features.daily.thresholds import daily_threshold
 
 from .base import AlertDraft, Rule, RuleContext
+from .cabin_factors import cabin_factors
 from .r_slp_01_short_sleep import fmt_nights, short_sleep
 
 ALERT_ID_TOKEN = "{alertId}"  # replaced with the real alert id by engine_hooks.py
@@ -79,17 +84,21 @@ class FatiguePatternRule(Rule):
             f"test{'s' if n_tests != 1 else ''} in the last 48 h vs your baseline {base.median_ms:.0f} ms "
             f"(+{pct:.0f} %; this alert starts at +{slower_pct:g} %; baseline from {base.n} earlier tests)."
         )
+        # Window = the nights and tests this alert looks at.
+        since = min([parse_ts(s.start) for s in sleep.nights] + [ctx.now - timedelta(hours=48)])
+        cab_factors, cab_used = cabin_factors(ctx, since)
         return AlertDraft(
             level="review",
             title="Possible fatigue pattern: short sleep and slower reaction time",
             what_changed=what,
-            data_used=[s.id for s in sleep.short] + [t.id for t in recent],
+            data_used=[s.id for s in sleep.short] + [t.id for t in recent] + cab_used,
             missing=fatigue_missing(ctx),
             possible_factors=[
                 "Accumulated short sleep may be slowing reaction time (possible link, not confirmed)",
                 "Schedule shifts or a heavy workload (not confirmed)",
                 "Stress or low mood (not confirmed; today's check-in would help)",
                 "Distraction or a disturbed setting during the test (not confirmed)",
+                *cab_factors,
             ],
             next_steps=[
                 DailyNextStep(text="Do today's check-in (mood and stress)",
