@@ -52,7 +52,7 @@ const BODY_SYSTEM_TILES: { id: string; label: string; Icon: typeof Radiation; to
   { id: 'respiratory', label: 'Respiratory & O₂', Icon: Wind },
   { id: 'sleep', label: 'Sleep & circadian', Icon: Moon },
   { id: 'cognition', label: 'Cognition & behaviour', Icon: Brain },
-  { id: 'bone_muscle', label: 'Bone & muscle', Icon: Bone },
+  { id: 'bone_muscle', label: 'Bone & muscle', Icon: Bone, to: '/bone' },
   { id: 'radiation', label: 'Radiation exposure', Icon: Radiation, to: '/radiation' },
   { id: 'vision', label: 'Vision & fluid shift', Icon: Eye, to: '/vision', pageFirst: true },
   { id: 'thermoregulation', label: 'Thermoregulation', Icon: Thermometer },
@@ -280,6 +280,7 @@ export default function Today() {
                       {entry ? BODY_STATUS_LABELS[entry.status] : 'Unavailable'}
                       {entry?.statusLabel && ` · ${entry.statusLabel}`}
                     </span>
+                    {entry?.reason && <small className={styles.systemReason}>{entry.reason}</small>}
                   </span>
                   {href && <ArrowRight size={15} className={styles.systemArrow} aria-hidden />}
                 </>

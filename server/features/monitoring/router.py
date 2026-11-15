@@ -21,11 +21,13 @@ from server.core.models import (
 from server.core.simulator import UNITS
 from server.core.status import mission_clock, mission_day_start
 
-from . import vision
+from . import bone, vision
+from .bone import router as bone_router
 from .vision import router as vision_router
 
 router = APIRouter(tags=["monitoring"])
 router.include_router(vision_router)  # /vision/checks, /vision/summary
+router.include_router(bone_router)  # /bone/estimate
 
 
 @router.get("/profile")
@@ -302,7 +304,7 @@ SYSTEM_RULE_PREFIXES: dict[str, tuple[str, ...]] = {
     "respiratory": ("R-SPO2-", "R-RESP-"),
     "sleep": ("R-FAT-", "R-SLEEP-"),
     "cognition": ("R-FAT-", "R-COG-"),
-    "bone_muscle": ("R-EXW-", "R-MSK-"),
+    "bone_muscle": ("R-EX-", "R-EXW-", "R-MSK-"),  # R-EX-01 missed exercise -> review
     "radiation": ("R-RAD-",),
     "vision": ("R-VIS-", "R-SANS-"),
     "thermoregulation": ("R-DATA-", "R-THERM-"),
@@ -317,6 +319,7 @@ class BodySystem(ApiModel):
 
     status_label: short qualifier shown after the status ("within limit"); None for most tiles.
     simulated: the tile's value is a simulated estimate (radiation), not a measurement.
+    reason: one line under the status saying why the system is tracked this way (bone & muscle).
     Vision has no sensor: its tile reflects the crew's self-check (server/features/monitoring/vision.py).
     """
 
@@ -326,6 +329,7 @@ class BodySystem(ApiModel):
     alert_id: Optional[str] = None
     status_label: Optional[str] = None
     simulated: bool = False
+    reason: Optional[str] = None
 
 
 # ---- Radiation estimate -----------------------------------------------------
@@ -469,14 +473,14 @@ def _cognition(profile: Optional[Profile]) -> tuple[BodySystemStatus, str]:
 
 
 def _bone_muscle(today: int) -> tuple[BodySystemStatus, str]:
-    # Only past days of this mission week (today excluded: it is not over yet).
-    plan_day = {p["id"]: p["day"] for p in db.query("exercise_plans")}
-    logs = [l for l in db.query("exercise_logs") if today - 6 <= plan_day.get(l["plan_id"], -1) <= today - 1]
-    if not logs:
+    """Stable: exercise done or partial on most planned past days of this week (today excluded).
+    Review: fewer than that, or R-EX-01 is open (missed on 2 days in a row; applied by the caller
+    through SYSTEM_RULE_PREFIXES, so the tile and the alert always agree)."""
+    c = bone.week_adherence(today)
+    if c["done"] + c["partial"] + c["skipped"] == 0:
         return "no_data", "No exercise logged this week"
-    done = sum(1 for l in logs if l["status"] == "done")
-    partial = sum(1 for l in logs if l["status"] == "partial")
-    return "stable", f"{done} done, {partial} partial this week"
+    text = f"{c['done']} done, {c['partial']} partial this week"
+    return ("stable" if bone.most_days_exercised(c) else "review"), text
 
 
 def _thermoregulation(profile: Optional[Profile], now, sensors: list[Sensor]) -> tuple[BodySystemStatus, str]:
@@ -525,6 +529,8 @@ def body_systems() -> list[BodySystem]:
             extra = {"status_label": rad_label, "simulated": rad_status != "no_data"}
         elif system == "vision":
             extra = {"status_label": vis_label}
+        elif system == "bone_muscle":
+            extra = {"reason": bone.WHY}
         alert_id = None
         alert = next((a for a in open_alerts if a.rule_id.startswith(SYSTEM_RULE_PREFIXES[system])), None)
         if alert is not None:

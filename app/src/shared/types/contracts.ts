@@ -254,6 +254,24 @@ export interface BodySystem {
   statusLabel?: string | null;
   /** The value is a simulated estimate, not a measurement (radiation). */
   simulated?: boolean;
+  /** One line under the status: why the system is tracked this way (bone & muscle). */
+  reason?: string | null;
+}
+
+/** GET /bone/estimate: months in flight × NASA's average bone loss per month. Illustrative only. */
+export interface BoneEstimate {
+  available: boolean;
+  missionDay: number;
+  monthsInFlight: number;
+  lossPctPerMonthMin: number | null;
+  lossPctPerMonthMax: number | null;
+  estimatedLossPctMin: number | null;
+  estimatedLossPctMax: number | null;
+  source: string | null;
+  label: string;
+  note: string;
+  sourceScope: string;
+  why: string;
 }
 
 /** GET /radiation/estimate: mission day × MSL RAD cruise rate, against the NASA career limit. */
