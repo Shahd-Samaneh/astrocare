@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 import statistics
 from datetime import timedelta
-from typing import Literal, Optional
+from typing import Literal, Optional, get_args
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import Field
@@ -349,6 +349,28 @@ BodySystemStatus = Literal["stable", "review", "no_data"]
 _NO_MEASUREMENTS = "No connected measurements"
 
 
+# The manual-reading endpoint (POST /readings/manual) takes any vital Metric, skin_temp included.
+THERMO_MANUAL_ENTRY = "skin_temp" in get_args(Metric)
+
+
+class ThermoDetail(ApiModel):
+    """Extra lines for the thermoregulation tile.
+
+    status_text: the word shown as the status ("Stable", "Review", "Sensor disconnected", "No data").
+    fresh: the latest skin temperature is within stale_minutes; when False the value is dimmed.
+    last_ts: time of the latest skin temperature reading (any quality), if any.
+    manual_entry: POST /readings/manual accepts skin_temp.
+    cabin: cabin temperature with its sourced comfort zone; cabin_source the full limit source.
+    """
+
+    status_text: str
+    fresh: bool
+    last_ts: Optional[str] = None
+    manual_entry: bool = False
+    cabin: Optional[str] = None
+    cabin_source: Optional[str] = None
+
+
 class BodySystem(ApiModel):
     """A Today-screen tile for one physiological system.
 
@@ -365,6 +387,7 @@ class BodySystem(ApiModel):
     status_label: Optional[str] = None
     simulated: bool = False
     reason: Optional[str] = None
+    thermo: Optional[ThermoDetail] = None
 
 
 # ---- Radiation estimate -----------------------------------------------------
@@ -518,21 +541,75 @@ def _bone_muscle(today: int) -> tuple[BodySystemStatus, str]:
     return ("stable" if bone.most_days_exercised(c) else "review"), text
 
 
-def _thermoregulation(profile: Optional[Profile], now, sensors: list[Sensor]) -> tuple[BodySystemStatus, str]:
+def _num(v: float) -> str:
+    """22.50 -> '22.5', 20.0 -> '20' (one decimal at most, as the cabin tiles show it)."""
+    return f"{round(v, 1):g}"
+
+
+def _ago(minutes: float) -> str:
+    """Same wording as the app's relativeTime(): 'just now', '5 min ago', '6 h ago', '2 days ago'."""
+    m = int(minutes)
+    if m < 1:
+        return "just now"
+    if m < 60:
+        return f"{m} min ago"
+    if m < 1440:
+        return f"{m // 60} h ago"
+    d = m // 1440
+    return f"{d} day{'' if d == 1 else 's'} ago"
+
+
+def _thermo_cabin(now) -> tuple[Optional[str], Optional[str]]:
+    """'Cabin 22.5 °C · comfort zone 20–25 °C (NASA-STD-3001 [V2 6013])' and the full limit source.
+
+    Uses the same sourced limit as the cabin tiles (_cabin_limit); without a sourced limit only
+    the reading is shown, and a stale cabin reading says so."""
+    limit = _cabin_limit("cabin_temp")
+    rows = db.query("cabin_readings", "metric = 'cabin_temp'", order_by="ts DESC", limit=1)
+    if not rows and limit is None:
+        return None, None
+    parts: list[str] = []
+    if rows:
+        r = CabinReading.model_validate(rows[0])
+        age = (now - parse_ts(r.ts)).total_seconds() / 60
+        parts.append(f"Cabin {_num(r.value)} {r.unit}" + (f" (stale, {_ago(age)})" if age > float(threshold("stale_minutes")) else ""))
+    else:
+        parts.append("Cabin: no reading")
+    if limit is not None and limit.min is not None and limit.max is not None:
+        name = (limit.name or "range").lower()
+        parts.append(f"{name} {_num(limit.min)}–{_num(limit.max)} {limit.unit} ({limit.source_label})")
+    return " · ".join(parts), (limit.source if limit else None)
+
+
+def _thermoregulation(profile: Optional[Profile], now, sensors: list[Sensor]) -> tuple[BodySystemStatus, str, ThermoDetail]:
+    """Stable only with a fresh, good-quality skin temperature inside the personal baseline;
+    review when fresh and good but outside it. Stale or missing data is never stable: it shows
+    the last known value with its age and "Sensor disconnected" (sensor down) or "No data"."""
     rows = db.query("readings", "metric = 'skin_temp'", order_by="ts DESC", limit=1)
     sensor = next((s for s in sensors if "skin_temp" in s.metrics), None)
     r = Reading.model_validate(rows[0]) if rows else None
     age = (now - parse_ts(r.ts)).total_seconds() / 60 if r else None
-    if r is None or (age is not None and age > float(threshold("stale_minutes"))):
-        if sensor and sensor.status != "connected":
-            return "no_data", f"{sensor.name.split()[-1].lower()} {sensor.status.replace('_', ' ')}"
-        return "no_data", _NO_MEASUREMENTS
+    fresh = r is not None and age is not None and age <= float(threshold("stale_minutes"))
+    cabin, cabin_source = _thermo_cabin(now)
+
+    def detail(status_text: str) -> ThermoDetail:
+        return ThermoDetail(status_text=status_text, fresh=fresh, last_ts=r.ts if r else None,
+                            manual_entry=THERMO_MANUAL_ENTRY, cabin=cabin, cabin_source=cabin_source)
+
+    if r is None or age is None or not fresh:
+        down = sensor is not None and sensor.status == "disconnected"
+        label = "Sensor disconnected" if down else "No data"
+        text = f"Last: {_num(r.value)} {r.unit} · {_ago(age)}" if r is not None and age is not None else "No skin temperature reading"
+        return "no_data", text, detail(label)
+    value = f"Skin temp {_num(r.value)} {r.unit}"
+    if r.quality != "good":
+        return "no_data", f"{value} · {r.quality} quality · {_ago(age)}", detail("No data")
     base = profile.baseline.get("skin_temp") if profile else None
     if base is None:
-        return "no_data", _NO_MEASUREMENTS
+        return "no_data", f"{value} · no personal baseline", detail("No data")
     if _outside_baseline(r.value, base.mean, base.sd):
-        return "review", "Skin temp out of baseline"
-    return "stable", "Skin temp in baseline"
+        return "review", f"{value} · outside baseline", detail("Review")
+    return "stable", f"{value} · in baseline", detail("Stable")
 
 
 @router.get("/body-systems")
@@ -549,8 +626,9 @@ def body_systems() -> list[BodySystem]:
         "sleep": _sleep(),
         "cognition": _cognition(profile),
         "bone_muscle": _bone_muscle(today),
-        "thermoregulation": _thermoregulation(profile, now, sensors),
     }
+    th_status, th_text, th_detail = _thermoregulation(profile, now, sensors)
+    computed["thermoregulation"] = (th_status, th_text)
     rad_status, rad_text, rad_label = _radiation(today)
     computed["radiation"] = (rad_status, rad_text)
     vis_status, vis_text, vis_label = vision.body_system_tile(now)
@@ -566,6 +644,8 @@ def body_systems() -> list[BodySystem]:
             extra = {"status_label": vis_label}
         elif system == "bone_muscle":
             extra = {"reason": bone.WHY}
+        elif system == "thermoregulation":
+            extra = {"thermo": th_detail}
         alert_id = None
         alert = next((a for a in open_alerts if a.rule_id.startswith(SYSTEM_RULE_PREFIXES[system])), None)
         if alert is not None:
@@ -574,6 +654,8 @@ def body_systems() -> list[BodySystem]:
             else:
                 status, alert_id = "review", alert.id
                 extra.pop("status_label", None)  # "within limit" would contradict the alert
+                if "thermo" in extra:
+                    extra["thermo"] = extra["thermo"].model_copy(update={"status_text": "Review"})
         out.append(BodySystem(id=system, status=status, text=text, alert_id=alert_id, **extra))
     return out
 
